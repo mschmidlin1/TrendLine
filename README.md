@@ -1,0 +1,2 @@
+# TrendLine
+A trade bot
