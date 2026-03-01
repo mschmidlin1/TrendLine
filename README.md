@@ -4,178 +4,52 @@
 
 # TrendLine
 
-**TrendLine** is an intelligent stock trading bot that leverages news sentiment analysis and market trends to make automated trading decisions. By scraping and analyzing news articles from various financial websites, TrendLine identifies market sentiment patterns and executes trades based on real-time information and algorithmic strategies.
+### Project Description
 
-## Overview
+I want it to work the same way as it would if a person were to trade stocks based on news data (only I want it to be automated). So for a person trading stocks on news data, I think this pipeline would be correct:
+- Person sees an article or headline saying something positive or negative about a particular stock.
+- Person goes and trades stocks based on that info. Buying if they hear positive news, or selling if they hear negative news (and they have purchased that stock in the past).
 
-TrendLine combines natural language processing with quantitative trading strategies to:
-- **Monitor** financial news sources in real-time
-- **Analyze** market sentiment from news articles and headlines
-- **Execute** automated trades based on sentiment indicators and market trends
-- **Adapt** to changing market conditions through continuous learning
 
-This bot is designed for traders who want to capitalize on news-driven market movements and sentiment shifts before they're fully reflected in stock prices.
+So for automation of this process, here is how I see it working:
+- A program scrapes news data from websites during market hours. It scrapes data at some regular interval (10 mins for example). 
+   - The websites that are being scraped can be a pre-determined list. We want the news that we trade on to be reliable. Therefore we can have a pre-determined list of reliable news websites that we can repeatedly check. 
+- I think we can limit the scope of this project to buying stock for positive sentiment headlines, then selling after a fixed amount of time. Obviously you can do much more sophisticated algorithms to determine when to sell. For the sake of getting something working, we will simply buy when there is positive market sentiment, and sell a fixed (but configurable) amount of time later.
+   - If the market is close (or will be closed) after the fixed amount of time to sell, we can simply sell during market close or market open the next day.
+- There is a challenge I can forsee. We need to associate each headline with a company, which I think is easier said than done. Most likely some type of NLP will be needed here to extract the company name (if there is one) from each news headline. 
+   - If this task doesn't seem feasible, we can simply get a list of publicly traded company names from somewhere and reference against that list. 
+   - This public traded list of companies may be necessary anyway so we can look up the ticker symbols for each company once we associate the headline with a company.
+- We will need everything in the app to be well logged so we have good traceability of what happened.
+- We will need to have hard (configurable) caps on the $ amount we are allowed to buy in total, and for each individual company. 
 
-## Features
 
-- 🔍 **News Scraping**: Automated collection of financial news from multiple sources
-- 📊 **Sentiment Analysis**: Advanced NLP algorithms to gauge market sentiment
-- 🤖 **Automated Trading**: Execute trades based on predefined strategies and sentiment signals
-- 📈 **Trend Detection**: Identify emerging market trends from news patterns
-- ⚡ **Real-time Processing**: React quickly to breaking news and market events
 
-## Architecture
+What if multiple positive headlines appear for the same company?
+- In this case we will average sentiments across the different headlines.
 
-### Service-Based Class Structure
+How are duplicate headlines handled?
+- If the headlines are from different websites, I think it's fine to average them. If they are from the website we probably need to delete one since that would be a true duplicate.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Streamlit Frontend App                      │
-│                    (User Interface Layer)                       │
-│  - Dashboard visualization                                      │
-│  - Trade monitoring                                             │
-│  - Configuration management                                     │
-│  - Performance metrics display                                  │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Core Services Layer                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              TradingService                              │  │
-│  │  - Execute buy/sell orders                               │  │
-│  │  - Manage positions                                      │  │
-│  │  - Calculate position sizing                             │  │
-│  │  - Risk management                                       │  │
-│  │  - Order validation                                      │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              NewsScrapingService                         │  │
-│  │  - Scrape financial news sources                         │  │
-│  │  - Parse article content                                 │  │
-│  │  - Extract headlines and metadata                        │  │
-│  │  - Schedule periodic scraping                            │  │
-│  │  - Handle rate limiting                                  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │           SentimentAnalysisService                       │  │
-│  │  - Analyze news sentiment                                │  │
-│  │  - Generate sentiment scores                             │  │
-│  │  - Identify sentiment trends                             │  │
-│  │  - Aggregate multi-source sentiment                      │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              StrategyService                             │  │
-│  │  - Implement trading strategies                          │  │
-│  │  - Generate trading signals                              │  │
-│  │  - Backtest strategies                                   │  │
-│  │  - Strategy performance evaluation                       │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              MarketDataService                           │  │
-│  │  - Fetch real-time stock prices                          │  │
-│  │  - Retrieve historical data                              │  │
-│  │  - Monitor market indicators                             │  │
-│  │  - Handle API connections                                │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              LoggingService                              │  │
-│  │  - Centralized logging                                   │  │
-│  │  - Log levels (DEBUG, INFO, WARNING, ERROR)              │  │
-│  │  - Structured logging                                    │  │
-│  │  - Log rotation and archival                             │  │
-│  │  - Performance metrics logging                           │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Data Storage Layer                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              TradeRepository                             │  │
-│  │  - Store executed trades                                 │  │
-│  │  - Trade history queries                                 │  │
-│  │  - Position tracking                                     │  │
-│  │  - P&L calculations                                      │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              NewsRepository                              │  │
-│  │  - Store scraped news articles                           │  │
-│  │  - Cache sentiment analysis results                      │  │
-│  │  - Prevent duplicate scraping                            │  │
-│  │  - Historical news queries                               │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              ConfigurationRepository                     │  │
-│  │  - Store bot configuration                               │  │
-│  │  - Strategy parameters                                   │  │
-│  │  - API credentials (encrypted)                           │  │
-│  │  - User preferences                                      │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              PerformanceRepository                       │  │
-│  │  - Store performance metrics                             │  │
-│  │  - Portfolio snapshots                                   │  │
-│  │  - Strategy performance data                             │  │
-│  │  - Risk metrics history                                  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+Will there be stop-loss mechanisms to prevent major losses?
+- We will need to implement stop loss mechanisms. This would most likely be applicable in the case of a mis-classified sentiment (very negative mis-classified as very positive). We can set some sort of percentage threshold which will be configurable in the app. 
 
-┌─────────────────────────────────────────────────────────────────┐
-│                      Database Layer                             │
-│  - SQLite / PostgreSQL for structured data                     │
-│  - JSON files for configuration                                │
-│  - CSV for data exports                                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+How many shares (or how much $) to buy per positive headline?
+- We can start with a fixed amount of money (assuming we can buy partial shares). Then we can develop a more sophisticated algorithm later to buy more stock based on confidence. 
 
-### Class Interaction Flow
+How will ambiguous company names be handled (e.g., "Apple" the company vs the fruit)?
+- We will probably need some sort of NLP to classify if the headline is about a company or not. This will take some reasearch since I'm not sure what kind of model would do this yet.
 
-```
-1. News Collection Flow:
-   NewsScrapingService → NewsRepository → LoggingService
-                      ↓
-              SentimentAnalysisService → NewsRepository
-                      ↓
-              StrategyService
+Will the scraper only run during market hours, or continuously?
+- The scraper will probably run continuously. We will need different logic to handle headlines that trigger stock buying while the market is open vs closed.
+- Market closed logic: If a "buy" is triggered while the market is closed, buy as soon as the market opens. However, the "hold" timer doesn't start until the purchase happens.
 
-2. Trading Decision Flow:
-   MarketDataService → StrategyService → TradingService → TradeRepository
-                                              ↓
-                                        LoggingService
+How will pre-market and after-hours trading be handled?
+- I need to look into this to understand it better. I understand it means extended hours which you can trade in but I don't understand who has access to it or when they have access.
 
-3. Frontend Display Flow:
-   Streamlit App → All Services (read-only queries)
-                → All Repositories (data retrieval)
-                → LoggingService (audit trail)
+Where will trade history be stored?
+How will scraped headlines be archived?
+- We will need a database to store trade history as well as a database to store headlines that were pulled. One question is, do we need to store all headlines that were pulled? Or can we just store the ones that triggered a buy.
 
-4. Logging Flow:
-   All Services → LoggingService → Log Files/Database
-```
-
-### Key Design Principles
-
-- **Separation of Concerns**: Each service has a single, well-defined responsibility
-- **Dependency Injection**: Services receive dependencies through constructors
-- **Repository Pattern**: Data access is abstracted through repository classes
-- **Centralized Logging**: All operations flow through the LoggingService
-- **Stateless Services**: Services don't maintain state; state is persisted in repositories
-- **Interface-Based Design**: Services implement interfaces for easy testing and mocking
-
----
-
-*Disclaimer: This bot is for educational and research purposes. Always conduct thorough testing and risk assessment before using automated trading systems with real capital.*
+App visualizations (streamlit web app)
+- We will need a plot (interactive plotly line plot) to visualize how much money we have over time.
+- In addition, we will want a table for any currently held positions to show if we are up or down for them.
