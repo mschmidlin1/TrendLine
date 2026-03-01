@@ -1,55 +1,223 @@
-<div align="center">
-  <img src="resources/logo_big.png" alt="TrendLine Logo" width="400"/>
-</div>
+![Logo](resources/logo_big.png)
 
 # TrendLine
 
-### Project Description
+**Automated News-Driven Stock Trading System**
 
-I want it to work the same way as it would if a person were to trade stocks based on news data (only I want it to be automated). So for a person trading stocks on news data, I think this pipeline would be correct:
-- Person sees an article or headline saying something positive or negative about a particular stock.
-- Person goes and trades stocks based on that info. Buying if they hear positive news, or selling if they hear negative news (and they have purchased that stock in the past).
+---
 
+## Overview
 
-So for automation of this process, here is how I see it working:
-- A program scrapes news data from websites during market hours. It scrapes data at some regular interval (10 mins for example). 
-   - The websites that are being scraped can be a pre-determined list. We want the news that we trade on to be reliable. Therefore we can have a pre-determined list of reliable news websites that we can repeatedly check. 
-- I think we can limit the scope of this project to buying stock for positive sentiment headlines, then selling after a fixed amount of time. Obviously you can do much more sophisticated algorithms to determine when to sell. For the sake of getting something working, we will simply buy when there is positive market sentiment, and sell a fixed (but configurable) amount of time later.
-   - If the market is close (or will be closed) after the fixed amount of time to sell, we can simply sell during market close or market open the next day.
-- There is a challenge I can forsee. We need to associate each headline with a company, which I think is easier said than done. Most likely some type of NLP will be needed here to extract the company name (if there is one) from each news headline. 
-   - If this task doesn't seem feasible, we can simply get a list of publicly traded company names from somewhere and reference against that list. 
-   - This public traded list of companies may be necessary anyway so we can look up the ticker symbols for each company once we associate the headline with a company.
-- We will need everything in the app to be well logged so we have good traceability of what happened.
-- We will need to have hard (configurable) caps on the $ amount we are allowed to buy in total, and for each individual company. 
+TrendLine is an automated trading system that monitors financial news in real-time and executes stock trades based on sentiment analysis. The system mimics the decision-making process of a human trader who buys stocks on positive news and sells on negative news, but operates continuously and systematically during market hours.
 
+### Key Capabilities
 
+- **Automated News Monitoring**: Continuously scrapes financial news from reliable, pre-configured sources
+- **Sentiment Analysis**: Analyzes headlines to determine market sentiment for specific companies
+- **Intelligent Trading**: Executes buy/sell orders based on sentiment signals and configurable rules
+- **Risk Management**: Implements stop-loss mechanisms and position limits to protect capital
+- **Real-Time Visualization**: Provides interactive dashboards to monitor portfolio performance and active positions
 
-What if multiple positive headlines appear for the same company?
-- In this case we will average sentiments across the different headlines.
+---
 
-How are duplicate headlines handled?
-- If the headlines are from different websites, I think it's fine to average them. If they are from the website we probably need to delete one since that would be a true duplicate.
+## How It Works
 
-Will there be stop-loss mechanisms to prevent major losses?
-- We will need to implement stop loss mechanisms. This would most likely be applicable in the case of a mis-classified sentiment (very negative mis-classified as very positive). We can set some sort of percentage threshold which will be configurable in the app. 
+```mermaid
+graph TD
+    A[News Scraper] -->|Scrapes at intervals| B[Headline Collection]
+    B --> C[Company Identification]
+    C --> D[Sentiment Analysis]
+    D --> E{Positive Sentiment?}
+    E -->|Yes| F[Check Market Status]
+    E -->|No| B
+    F -->|Market Open| G[Execute Buy Order]
+    F -->|Market Closed| H[Queue for Market Open]
+    H --> G
+    G --> I[Start Hold Timer]
+    I --> J[Monitor Position]
+    J --> K{Sell Condition Met?}
+    K -->|Hold Time Elapsed| L[Execute Sell Order]
+    K -->|Stop-Loss Triggered| L
+    K -->|Continue Holding| J
+    L --> M[Record Trade History]
+```
 
-How many shares (or how much $) to buy per positive headline?
-- We can start with a fixed amount of money (assuming we can buy partial shares). Then we can develop a more sophisticated algorithm later to buy more stock based on confidence. 
+### Workflow Steps
 
-How will ambiguous company names be handled (e.g., "Apple" the company vs the fruit)?
-- We will probably need some sort of NLP to classify if the headline is about a company or not. This will take some reasearch since I'm not sure what kind of model would do this yet.
+1. **News Collection**: The scraper monitors pre-determined reliable news sources at regular intervals (e.g., every 10 minutes)
 
-Will the scraper only run during market hours, or continuously?
-- The scraper will probably run continuously. We will need different logic to handle headlines that trigger stock buying while the market is open vs closed.
-- Market closed logic: If a "buy" is triggered while the market is closed, buy as soon as the market opens. However, the "hold" timer doesn't start until the purchase happens.
+2. **Company Identification**: Natural Language Processing (NLP) extracts company names from headlines and resolves them to stock ticker symbols using a database of publicly traded companies
 
-How will pre-market and after-hours trading be handled?
-- I need to look into this to understand it better. I understand it means extended hours which you can trade in but I don't understand who has access to it or when they have access.
+3. **Sentiment Analysis**: Each headline is analyzed to determine sentiment (positive, negative, or neutral). Multiple headlines for the same company are averaged to produce an aggregate sentiment score
 
-Where will trade history be stored?
-How will scraped headlines be archived?
-- We will need a database to store trade history as well as a database to store headlines that were pulled. One question is, do we need to store all headlines that were pulled? Or can we just store the ones that triggered a buy.
+4. **Trade Execution**: 
+   - **Buy Signal**: Positive sentiment triggers a buy order for a fixed dollar amount
+   - **Market Timing**: If the market is closed, the order is queued for execution at market open
+   - **Hold Period**: After purchase, the position is held for a configurable duration
+   - **Sell Signal**: Positions are sold after the hold period expires or if stop-loss conditions are met
 
-App visualizations (streamlit web app)
-- We will need a plot (interactive plotly line plot) to visualize how much money we have over time.
-- In addition, we will want a table for any currently held positions to show if we are up or down for them.
+5. **Data Recording**: All trades, headlines, and decisions are logged for traceability and analysis
+
+---
+
+## Core Features
+
+### News Scraping System
+- Monitors multiple reliable news sources continuously
+- Configurable scraping intervals
+- Operates 24/7 with market-aware logic
+- Handles duplicate detection across sources
+
+### Sentiment Analysis Engine
+- Analyzes headlines for company-specific sentiment
+- Aggregates multiple headlines for the same company
+- Distinguishes between company references and ambiguous terms (e.g., "Apple" the company vs. the fruit)
+
+### Trading Automation
+- Executes trades based on sentiment signals
+- Handles market open/close transitions
+- Supports partial share purchases
+- Queues orders when market is closed
+
+### Risk Management
+- **Position Limits**: Configurable caps on total investment and per-company exposure
+- **Stop-Loss Protection**: Automatic sell triggers if losses exceed threshold
+- **Misclassification Protection**: Guards against false positive sentiment signals
+
+### Visualization Dashboard
+- Interactive Plotly line chart showing portfolio value over time
+- Real-time table of active positions with profit/loss indicators
+- Built with Streamlit for easy web access
+
+---
+
+## Trading Strategy
+
+### Buy Conditions
+- Positive sentiment detected in news headline
+- Company successfully identified and ticker resolved
+- Investment limits not exceeded
+- Market is open (or order queued for next open)
+
+### Sell Conditions
+- **Time-Based**: Hold period has elapsed (configurable duration)
+- **Stop-Loss**: Position loss exceeds configured threshold
+- **Market Close**: If hold period extends past market close, sell at close or next market open
+
+### Position Management
+- **Fixed Investment Amount**: Each buy uses a predetermined dollar amount (supports fractional shares)
+- **Duplicate Handling**: 
+  - Same headline from different sources: Average sentiments
+  - Same headline from same source: Discard duplicate
+- **Multiple Headlines**: Aggregate sentiment across all headlines for a company
+
+---
+
+## Configuration Options
+
+The system provides flexible configuration for various parameters:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| **Scraping Interval** | Frequency of news checks | 10 minutes |
+| **Hold Duration** | Time to hold positions before selling | 2 hours |
+| **Investment Amount** | Fixed dollar amount per trade | $100 |
+| **Total Investment Cap** | Maximum total portfolio value | $10,000 |
+| **Per-Company Cap** | Maximum investment per company | $1,000 |
+| **Stop-Loss Threshold** | Loss percentage triggering automatic sell | 5% |
+| **News Sources** | List of reliable news websites to monitor | Configurable list |
+
+---
+
+## Technical Architecture
+
+### Components
+
+1. **News Scraper**
+   - Continuously monitors configured news sources
+   - Extracts headlines and metadata
+   - Implements rate limiting and error handling
+
+2. **Company Identification Module**
+   - NLP-based entity extraction from headlines
+   - Ticker symbol resolution via public company database
+   - Ambiguity resolution (company vs. non-company references)
+
+3. **Sentiment Analysis Engine**
+   - Headline sentiment classification
+   - Multi-headline aggregation
+   - Confidence scoring
+
+4. **Trading Engine**
+   - Market status monitoring
+   - Order execution and queuing
+   - Position tracking
+   - Stop-loss monitoring
+
+5. **Data Storage**
+   - **Trade History Database**: Records all executed trades with timestamps, prices, and outcomes
+   - **Headline Archive**: Stores scraped headlines (decision pending: all headlines vs. only those triggering trades)
+   - **Logging System**: Comprehensive logging for traceability and debugging
+
+6. **Visualization Dashboard**
+   - Streamlit web application
+   - Real-time portfolio performance charts
+   - Active position monitoring
+   - Historical trade analysis
+
+---
+
+## Data Management
+
+### Trade History
+- All buy and sell transactions recorded with:
+  - Timestamp
+  - Company/ticker
+  - Quantity and price
+  - Sentiment score
+  - Profit/loss
+  - Triggering headline(s)
+
+### Headline Archival
+- Scraped headlines stored with:
+  - Source URL
+  - Timestamp
+  - Extracted company
+  - Sentiment score
+  - Whether it triggered a trade
+
+### Logging
+- Comprehensive logging throughout the system for:
+  - Debugging and troubleshooting
+  - Audit trail of decisions
+  - Performance monitoring
+  - Error tracking
+
+---
+
+## Future Enhancements
+
+### Advanced Selling Algorithms
+- Move beyond fixed hold periods to dynamic selling strategies
+- Incorporate technical indicators
+- Implement trailing stop-losses
+
+### Confidence-Based Position Sizing
+- Vary investment amount based on sentiment confidence
+- Higher confidence = larger position size
+
+### Pre-Market and After-Hours Trading
+- Research and implement extended hours trading
+- Understand access requirements and limitations
+
+### Enhanced NLP Capabilities
+- Improve company identification accuracy
+- Better handling of ambiguous references
+- Multi-language support
+
+### Additional Risk Controls
+- Portfolio diversification rules
+- Sector exposure limits
+- Volatility-based position sizing
+
+---
