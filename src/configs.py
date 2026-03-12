@@ -7,3 +7,4 @@ STDOUT_LOG_LEVEL = "INFO"
 LOG_FILE = "logs.txt"
 LOG_PATH = "logs"
 
+NEWS_URLS = []
