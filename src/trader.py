@@ -7,10 +7,9 @@ from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest, Cryp
 from alpaca.data.requests import CryptoBarsRequest
 from alpaca.trading.models import Order
 from alpaca.data.timeframe import TimeFrame
-
+from configs import ALPACA_CHOSEN_SECRET_KEY
 from tl_logger import LoggingService
-
-
+import pandas as pd
 
 class Trader():
     timeframe_lookup = {
