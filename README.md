@@ -1,5 +1,11 @@
 ![Logo](resources/logo_big.png)
 
+# Temporary Notes and To-do's
+- We need to figure out some way to generate the generic "how much money we have" plot on our own. Alpaca may have some utility for this to make it easier. We can probably make another simple service for gathering this data and use the alpaca client singleton
+- Test the stock sell for a price and see if you need the time limit to be a day (similar to when you buy a stock for a price)
+
+I need a way to tell when a purchase order has actually been fullfilled. Basically when we submit an order, we probably need to log the information we get back in some service. Then we need to check the id of those orders to see when they are actually fullfilled. When they are full filled, that's when we can log that we need to sell the stock. 
+
 # TrendLine
 
 **Automated News-Driven Stock Trading System**

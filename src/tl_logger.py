@@ -1,7 +1,7 @@
 import logging
 import logging.config
-from configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH
-from singleton import SingletonMeta
+from src.configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH
+from src.singleton import SingletonMeta
 import os
 
 class LoggingService(metaclass=SingletonMeta):

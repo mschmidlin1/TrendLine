@@ -1,8 +1,7 @@
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from sentiment_service import SentimentResponse, SentimentService
+from src.sentiment_service import SentimentResponse, SentimentService
 # Add src directory to path
 
 
@@ -128,7 +127,7 @@ Note: The article does not have an explicitly negative tone towards any company 
             
             test_response = service._parse_sentiment("[Neutral] | NVIDIA (NVDA)")
 
-            true_response = SentimentResponse("neutral", "NVIDIA", format_match=True, ticker_found=True, raw_response="")
+            true_response = SentimentResponse("neutral", "NVIDIA", format_match=True, ticker_found=False, raw_response="")
             self.assertEqual(true_response.sentiment, test_response.sentiment)
             self.assertEqual(true_response.ticker, test_response.ticker)
             self.assertEqual(true_response.format_match, test_response.format_match)
@@ -151,7 +150,7 @@ Note: The article does not have an explicitly negative tone towards any company 
             
             test_response = service._parse_sentiment("[Sentiment] | [Ticker] Neutral | NVDA")
 
-            true_response = SentimentResponse("sentiment", "TICKER", format_match=False, ticker_found=True, raw_response="")
+            true_response = SentimentResponse("sentiment", "TICKER", format_match=False, ticker_found=False, raw_response="")
             self.assertEqual(true_response.sentiment, test_response.sentiment)
             self.assertEqual(true_response.ticker, test_response.ticker)
             self.assertEqual(true_response.format_match, test_response.format_match)
@@ -163,7 +162,7 @@ Note: The article does not have an explicitly negative tone towards any company 
             
             test_response = service._parse_sentiment("Positive | APPL")
 
-            true_response = SentimentResponse("positive", "APPL", format_match=True, ticker_found=True, raw_response="")
+            true_response = SentimentResponse("positive", "APPL", format_match=True, ticker_found=False, raw_response="")
             self.assertEqual(true_response.sentiment, test_response.sentiment)
             self.assertEqual(true_response.ticker, test_response.ticker)
             self.assertEqual(true_response.format_match, test_response.format_match)
@@ -176,7 +175,8 @@ Note: The article does not have an explicitly negative tone towards any company 
             test_response = service.analyze_sentiment("NVIDIA shares soared 5% today after announcing a new Blackwell chip breakthrough.")
 
             #true_response = SentimentResponse("positive", "NVDA", format_match=True, ticker_found=True, raw_response="")
-            print(test_response)
+            if test_response.ticker == "NVDA":
+                self.assertTrue(test_response.ticker_found)
 
 if __name__ == '__main__':
     unittest.main()

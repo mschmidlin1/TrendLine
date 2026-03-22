@@ -1,12 +1,13 @@
-from singleton import SingletonMeta
+from src.singleton import SingletonMeta
 import ollama
-from timer import Timer
+from src.timer import Timer
 import ollama
 import re
 from dataclasses import dataclass
 from typing import Tuple, List
-from tl_logger import LoggingService
-from timer import Timer
+from src.tl_logger import LoggingService
+from src.ticker_service import TickerService
+
 @dataclass
 class SentimentResponse:
     """
@@ -59,6 +60,7 @@ class SentimentService(metaclass=SingletonMeta):
         Response Format: [Sentiment] | [Ticker]
         """
         self.logger = LoggingService()
+        self.ticker_service: TickerService = TickerService()
     
     def analyze_sentiment(self, text: str) -> SentimentResponse:
         """
@@ -112,7 +114,11 @@ class SentimentService(metaclass=SingletonMeta):
             if format_match:
                 sentiment, ticker = self._parse_response(response)
             ticker_found = True
-            if ticker.upper() == "NONE" or ticker=="":
+            if ticker.upper() == "NONE":
+                ticker_found = False
+            if ticker=="":
+                ticker_found = False
+            if not self.ticker_service.is_stock_symbol(ticker):
                 ticker_found = False
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False

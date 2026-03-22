@@ -1,97 +1,204 @@
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
 from alpaca.trading.requests import GetAssetsRequest
 from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest, CryptoLatestQuoteRequest
 from alpaca.data.requests import CryptoBarsRequest
-from alpaca.trading.models import Order
+from alpaca.trading.models import Order, Position
 from alpaca.data.timeframe import TimeFrame
-from configs import ALPACA_CHOSEN_SECRET_KEY
-from tl_logger import LoggingService
+from alpaca.data.models.quotes import Quote
+
 import pandas as pd
+from datetime import datetime
+from typing import Optional, Dict, List
+
+from src.configs import ALPACA_CHOSEN_SECRET_KEY
+from src.tl_logger import LoggingService
+from src.singleton import SingletonMeta
+from src.alpaca_client import AlpacaClient
+from src.ticker_service import TickerService
+from src.converters import orders_to_dataframe
 
 class Trader():
+    """
+    Base trader class for interacting with Alpaca trading API.
+    
+    Provides core functionality for trading operations including buying, selling,
+    retrieving account information, positions, and orders. This class serves as
+    the foundation for specialized traders (StockTrader, CryptoTrader).
+    
+    Attributes:
+        API_ID (str): Alpaca API key ID.
+        SECRET_KEY (str): Alpaca API secret key.
+        trading_client (TradingClient): Alpaca trading client instance.
+        logger (LoggingService): Logging service for tracking operations.
+        timeframe_lookup (dict): Mapping of string timeframes to TimeFrame enums.
+    """
     timeframe_lookup = {
         'day': TimeFrame.Day,
         'hour': TimeFrame.Hour,
         'minute': TimeFrame.Minute
     }
-    def __init__(self, API_ID, SECRET_KEY, paper=True):
-        self.API_ID = API_ID
-        self.SECRET_KEY = SECRET_KEY
-        self.trading_client = TradingClient(API_ID, SECRET_KEY, paper=paper)
+    def __init__(self, alpaca_client: AlpacaClient = AlpacaClient()) -> None:
+        """
+        Initialize the Trader instance.
+        
+        Args:
+            API_ID (str): Alpaca API key ID.
+            SECRET_KEY (str): Alpaca API secret key.
+            paper (bool, optional): Whether to use paper trading. Defaults to True.
+        """
+        self.alpaca_client: AlpacaClient = alpaca_client
+        self.trading_client = self.alpaca_client.trading_client
+        self.logger = LoggingService()
+        self.ticker_service = TickerService()
 
-        #logging.debug("Instance of Trader() class created.")
-
-    def get_account(self):
+    def get_account(self) -> None:
+        """
+        Retrieve and store the current account information.
+        
+        Updates the `self.account` attribute with the latest account data
+        from the Alpaca trading client.
+        """
         self.account = self.trading_client.get_account()
     
-    def get_buying_power(self):
+    def get_buying_power(self) -> None:
+        """
+        Retrieve and store the current buying power.
+        
+        Updates the `self.buying_power` attribute with the available buying
+        power from the account. Calls `get_account()` to ensure account
+        information is current.
+        """
         self.get_account()
         self.buying_power = float(self.account.buying_power)
-
-    def get_available_symbols(self):
-        search_params = GetAssetsRequest(asset_class=self.asset_class)
-        assets = self.trading_client.get_all_assets(search_params)
-        self.asset_dict = {asset.symbol: asset.name for asset in assets}
-        self.asset_symbols = list(self.asset_dict.keys())
     
-    def get_ask_price(self, symbol):
+    def get_ask_price(self, symbol: str) -> float:
+        """
+        Get the current ask price for a given symbol.
+        
+        Args:
+            symbol (str): The trading symbol to query.
+            
+        Returns:
+            float: The current ask price for the symbol.
+        """
         quote = self.get_quote(symbol)
         return quote.ask_price
 
-    def get_bid_price(self, symbol):
+    def get_bid_price(self, symbol: str) -> float:
+        """
+        Get the current bid price for a given symbol.
+        
+        Args:
+            symbol (str): The trading symbol to query.
+            
+        Returns:
+            float: The current bid price for the symbol.
+        """
         quote = self.get_quote(symbol)
         return quote.bid_price
     
-    def get_all_positions(self, ):
+    def get_all_positions(self) -> List[Position]:
         """
-        Gets all positions (cryto and stock) and stores them in a
-        `pd.DataFrame` which can be accessed at `self.positions_df`. """
-        self.get_account()
-        all_positions = self.trading_client.get_all_positions()
-        columns = list(all_positions[0].dict().keys())
-        positions_dict = {key: [] for key in columns}
-
-        for position in all_positions:
-            for key in columns:
-                positions_dict[key].append(position.dict()[key])
+        Gets all positions (crypto and stock) and stores them in a
+        `pd.DataFrame` which can be accessed at `self.positions_df`.
         
-        self.positions_df = pd.DataFrame(positions_dict)
-        for col in self.positions_df.columns:
-            self.positions_df[col] = pd.to_numeric(self.positions_df[col], errors='ignore')
-
-    def get_all_orders(self):
+        Retrieves all open positions from the trading client and converts
+        them into a pandas DataFrame with numeric type conversion applied
+        where appropriate.
         """
-        Gets all orders (crypto and stock) and stores them in a 
-        `pd.DataFrame` which can be accessed at `self.orders_df`.
-        
-        A return of `0` means that `self.orders_df` has been successfully stored. 
-        A return of `1` means that `self.orders_df` has been set to `None` becuase there were no open orders (empty dataframe). """
         self.get_account()
-        all_orders = self.trading_client.get_orders()
-        if len(all_orders)==0:
-            self.orders_df = None
-            return 1
-        columns = list(all_orders[0].dict().keys())
-        orders_dict = {key: [] for key in columns}
+        all_positions: List[Position] = self.trading_client.get_all_positions()
+        return all_positions
 
-        for order in all_orders:
-            for key in columns:
-                orders_dict[key].append(order.dict()[key])
+    def get_orders(self, filter_status: QueryOrderStatus = QueryOrderStatus.ALL) -> List[Order]:
+        """
+        Retrieve orders filtered by status and return as a pandas DataFrame.
         
-        self.orders_df = pd.DataFrame(orders_dict)
-        for col in self.orders_df.columns:
-            self.orders_df[col] = pd.to_numeric(self.orders_df[col], errors='ignore')
-        return 0
+        Args:
+            filter_status (QueryOrderStatus, optional): Filter for order status. Options include:
+                - QueryOrderStatus.OPEN: Only open orders (new, accepted, partially_filled)
+                - QueryOrderStatus.CLOSED: Only closed orders (filled, canceled, expired, rejected)
+                - QueryOrderStatus.ALL: All orders regardless of status
+                Defaults to QueryOrderStatus.ALL.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing order data with the following columns:
+                - id: Order ID (str)
+                - client_order_id: Client-assigned order ID (str)
+                - created_at: Order creation timestamp (datetime)
+                - updated_at: Last update timestamp (datetime)
+                - submitted_at: Submission timestamp (datetime)
+                - filled_at: Fill timestamp (datetime or None)
+                - expired_at: Expiration timestamp (datetime or None)
+                - canceled_at: Cancellation timestamp (datetime or None)
+                - failed_at: Failure timestamp (datetime or None)
+                - replaced_at: Replacement timestamp (datetime or None)
+                - replaced_by: ID of replacing order (str or None)
+                - replaces: ID of replaced order (str or None)
+                - asset_id: Asset UUID (str)
+                - symbol: Trading symbol (str)
+                - asset_class: Asset class (str)
+                - notional: Dollar amount for notional orders (float or None)
+                - qty: Quantity ordered (float or None)
+                - filled_qty: Quantity filled (float)
+                - filled_avg_price: Average fill price (float or None)
+                - order_class: Order class (str)
+                - order_type: Order type (str)
+                - type: Order type (str)
+                - side: Order side (str)
+                - time_in_force: Time in force (str)
+                - limit_price: Limit price (float or None)
+                - stop_price: Stop price (float or None)
+                - status: Order status (str)
+                - extended_hours: Extended hours flag (bool)
+                - legs: Legs for multi-leg orders (list or None)
+                - trail_percent: Trail percent (float or None)
+                - trail_price: Trail price (float or None)
+                - hwm: High water mark (float or None)
+                
+            Returns an empty DataFrame with no columns if no orders match the filter.
+        """
+        request = GetOrdersRequest(status=filter_status)
+        all_orders: List[Order] = self.trading_client.get_orders(filter=request)
+        return all_orders
+        
 
-    def buy(self, symbol: str, quantity=None, price=None, side=OrderSide.BUY, time_in_force=TimeInForce.GTC):
-        """Must choose either to *buy* a `quantity` or buy a specific amount in terms of
-        `price`. Both should be float or int arguments."""
-        #makes sure the symbol is legitimate
-        if symbol not in self.asset_symbols:
-            raise ValueError(f"symbol {symbol} not available.")
+    def get_orders_open(self) -> List[Order]:
+        """
+        Get all the open orders.
+        """
+        return self.get_orders(QueryOrderStatus.OPEN)
+    
+    def get_orders_closed(self) -> List[Order]:
+        """
+        Get all the closed orders.
+        """
+        return self.get_orders(QueryOrderStatus.CLOSED)
+
+    def buy(self, symbol: str, quantity: Optional[float] = None, price: Optional[float] = None,
+            side: OrderSide = OrderSide.BUY, time_in_force: TimeInForce = TimeInForce.GTC) -> Order | None:
+        """
+        Execute a buy order for the specified symbol.
+        
+        Must choose either to buy a `quantity` of shares or buy a specific amount in terms of
+        `price`. Both should be float or int arguments.
+        
+        Args:
+            symbol (str): The trading symbol to buy.
+            quantity (Optional[float], optional): Number of shares/units to buy. Defaults to None.
+            price (Optional[float], optional): Dollar amount to spend on the purchase. Defaults to None.
+            side (OrderSide, optional): Order side (should be BUY). Defaults to OrderSide.BUY.
+            time_in_force (TimeInForce, optional): Order time in force. Defaults to TimeInForce.GTC.
+            
+        Returns:
+            int: `alpaca.trading.models.Order` or `None` if no trade was submitted
+            
+        Raises:
+            ValueError: If symbol is not available or if both/neither quantity and price are specified.
+        """
         #check function imputs
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
@@ -100,10 +207,10 @@ class Trader():
             price = self.get_ask_price(symbol)*quantity
         self.get_buying_power()
         if price>self.buying_power:
-            logging.warning("Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
-            return 1
+            self.logger.log_warning("Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
+            return None
         elif quantity is None:
-            logging.info(f"Buying {price} dollars of {symbol}.")
+            self.logger.log_info(f"Buying {price} dollars of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 notional=price,
@@ -111,32 +218,53 @@ class Trader():
                                 time_in_force=time_in_force
                             )
         else:
-            logging.info(f"Buying {quantity} shares of {symbol}.")
+            self.logger.log_info(f"Buying {quantity} shares of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 qty=quantity,
                                 side=side,
                                 time_in_force=time_in_force
                             )
-        market_order = self.trading_client.submit_order(market_order_data)
+        market_order: Order = self.trading_client.submit_order(market_order_data)
         self.get_buying_power()
-        return 0
+        return market_order
 
-    def sell_all(self, cancel_orders=True):
+    def sell_all(self, cancel_orders: bool = True) -> None:
+        """
+        Close all open positions.
+        
+        Args:
+            cancel_orders (bool, optional): Whether to cancel all open orders. Defaults to True.
+        """
         self.trading_client.close_all_positions(cancel_orders=cancel_orders)
 
-    def sell(self, symbol: str, quantity=None, price=None, side=OrderSide.SELL, time_in_force=TimeInForce.GTC):
-        """Must choose either to *sell* a `quantity` or buy a specific amount in terms of
-        `price`. Both should be float or int arguments."""
-        #makes sure the symbol is legitimate
-        if symbol not in self.asset_symbols:
-            raise ValueError(f"symbol {symbol} not available.")
+    def sell(self, symbol: str, quantity: Optional[float] = None, price: Optional[float] = None,
+             side: OrderSide = OrderSide.SELL, time_in_force: TimeInForce = TimeInForce.GTC) -> int:
+        """
+        Execute a sell order for the specified symbol.
+        
+        Must choose either to *sell* a `quantity` or sell a specific amount in terms of
+        `price`. Both should be float or int arguments.
+        
+        Args:
+            symbol (str): The trading symbol to sell.
+            quantity (Optional[float], optional): Number of shares/units to sell. Defaults to None.
+            price (Optional[float], optional): Dollar amount worth of the asset to sell. Defaults to None.
+            side (OrderSide, optional): Order side (should be SELL). Defaults to OrderSide.SELL.
+            time_in_force (TimeInForce, optional): Order time in force. Defaults to TimeInForce.GTC.
+            
+        Returns:
+            int: 0 if order was successfully placed.
+            
+        Raises:
+            ValueError: If symbol is not available or if both/neither quantity and price are specified.
+        """
         #check function imputs
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
         
         if quantity is None:
-            logging.info(f"Selling {price} dollars of {symbol}.")
+            self.logger.log_info(f"Selling {price} dollars of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 notional=price,
@@ -144,7 +272,7 @@ class Trader():
                                 time_in_force=time_in_force
                             )
         else:
-            logging.info(f"Selling {quantity} shares of {symbol}.")
+            self.logger.log_info(f"Selling {quantity} shares of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 qty=quantity,
@@ -155,25 +283,69 @@ class Trader():
         self.get_buying_power()
         return 0
 
-    def cancel_all_orders(self):
+    def cancel_all_orders(self) -> List:
+        """
+        Cancel all open orders.
+        
+        Returns:
+            List: List of cancel status objects for each cancelled order.
+        """
         cancel_statuses = self.trading_client.cancel_orders()
         return cancel_statuses
 
-class Stock_Trader(Trader):
-    def __init__(self, *args, **kwargs):
+class StockTrader(Trader, metaclass=SingletonMeta):
+    """
+    Specialized trader for US equity (stock) trading.
+    
+    Extends the base Trader class with stock-specific functionality including
+    quote retrieval and historical bar data. Implements the Singleton pattern
+    to ensure only one instance exists.
+    
+    Attributes:
+        asset_class (str): Set to 'us_equity' for stock trading.
+    """
+    
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        Initialize the StockTrader instance.
+        
+        Args:
+            *args: Variable length argument list passed to parent Trader class.
+            **kwargs: Arbitrary keyword arguments passed to parent Trader class.
+        """
         super().__init__(*args, **kwargs)
-        logging.debug("Instace of Stock_Trader() class created.")
+        self.logger.log_debug("Instace of Stock_Trader() class created.")
         self.asset_class = 'us_equity'
-        self.get_available_symbols()
 
-    def get_quote(self, symbol):
-        client = StockHistoricalDataClient(self.API_ID, self.SECRET_KEY)
+    def get_quote(self, symbol: str) -> Quote:
+        """
+        Get the latest quote for a stock symbol.
+        
+        Args:
+            symbol (str): The stock symbol to query.
+            
+        Returns:
+            Quote: The latest quote object containing bid, ask, and other price data.
+        """
+        client = StockHistoricalDataClient(self.alpaca_client.api_id, self.alpaca_client.secret_key)
         multisymbol_request_params = StockLatestQuoteRequest(symbol_or_symbols=symbol)
         return client.get_stock_latest_quote(multisymbol_request_params)[symbol]
 
-    def get_bars(self, symbol: str, start: datetime, end: datetime, time_resolution='day'):
+    def get_bars(self, symbol: str, start: datetime, end: datetime, time_resolution: str = 'day') -> pd.DataFrame:
+        """
+        Retrieve historical bar data for a stock symbol.
+        
+        Args:
+            symbol (str): The stock symbol to query.
+            start (datetime): Start date/time for the historical data.
+            end (datetime): End date/time for the historical data.
+            time_resolution (str, optional): Time resolution for bars ('day', 'hour', 'minute'). Defaults to 'day'.
+            
+        Returns:
+            pd.DataFrame: DataFrame containing historical bar data (open, high, low, close, volume).
+        """
 
-        client = StockHistoricalDataClient(self.API_ID, self.SECRET_KEY)
+        client = StockHistoricalDataClient(self.alpaca_client.api_id, self.alpaca_client.secret_key)
         request_params = StockBarsRequest(
                         symbol_or_symbols=symbol,
                         timeframe=self.timeframe_lookup[time_resolution],
@@ -184,19 +356,56 @@ class Stock_Trader(Trader):
         bars = client.get_stock_bars(request_params)
         return bars.df
 
-class Crypto_Trader(Trader):
-    def __init__(self, *args, **kwargs):
+class CryptoTrader(Trader, metaclass=SingletonMeta):
+    """
+    Specialized trader for cryptocurrency trading.
+    
+    Extends the base Trader class with crypto-specific functionality including
+    quote retrieval and historical bar data.
+    
+    Attributes:
+        asset_class (str): Set to 'crypto' for cryptocurrency trading.
+    """
+    
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        Initialize the CryptoTrader instance.
+        
+        Args:
+            *args: Variable length argument list passed to parent Trader class.
+            **kwargs: Arbitrary keyword arguments passed to parent Trader class.
+        """
         super().__init__(*args, **kwargs)
-        logging.debug("Instace of Crypto_Trader() class created.")
+        self.logger.log_debug("Instace of Crypto_Trader() class created.")
         self.asset_class = 'crypto'
-        self.get_available_symbols()
 
-    def get_quote(self, symbol):
-        client = CryptoHistoricalDataClient(self.API_ID, self.SECRET_KEY)
+    def get_quote(self, symbol: str):
+        """
+        Get the latest quote for a cryptocurrency symbol.
+        
+        Args:
+            symbol (str): The cryptocurrency symbol to query.
+            
+        Returns:
+            Quote: The latest quote object containing bid, ask, and other price data.
+        """
+        client = CryptoHistoricalDataClient(self.alpaca_client.api_id, self.alpaca_client.secret_key)
         multisymbol_request_params = CryptoLatestQuoteRequest(symbol_or_symbols=symbol)
         return client.get_crypto_latest_quote(multisymbol_request_params)[symbol]
 
-    def get_bars(self, symbol: str, start: datetime, end: datetime, time_resolution='day'):
+    def get_bars(self, symbol: str, start: datetime, end: datetime, time_resolution: str = 'day') -> pd.DataFrame:
+        """
+        Retrieve historical bar data for a cryptocurrency symbol.
+        
+        Args:
+            symbol (str): The cryptocurrency symbol to query.
+            start (datetime): Start date/time for the historical data.
+            end (datetime): End date/time for the historical data.
+            time_resolution (str, optional): Time resolution for bars ('day', 'hour', 'minute'). Defaults to 'day'.
+            
+        Returns:
+            pd.DataFrame: DataFrame containing historical bar data (open, high, low, close, volume).
+        """
         client = CryptoHistoricalDataClient()
         request_params = CryptoBarsRequest(
                         symbol_or_symbols=symbol,

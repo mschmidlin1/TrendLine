@@ -1,8 +1,8 @@
-from timing_service import TimingService
+from market_monitor import TimingService
 import time
 from news_scraper import scrape_websites
 from configs import NEWS_URLS
-from ticker_service import TickerService
+# from ticker_service import TickerService
 from sentiment_service import SentimentService
 
 
