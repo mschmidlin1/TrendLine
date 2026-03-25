@@ -3,7 +3,10 @@ import os
 import tomllib
 from pathlib import Path
 from datetime import timedelta
-MARKET_HOLD_TIME = timedelta(days=5, hours=3)
+MARKET_HOLD_TIME = timedelta(days=0, hours=8)
+SCRAPE_FREQUENCY = timedelta(minutes=10)
+BASE_PURCHASE_DOLLARS = 10.0
+BASE_PURCHASE_QTY = 1
 #logging settings
 secrets_path = Path(".streamlit/secrets.toml")
 config = None

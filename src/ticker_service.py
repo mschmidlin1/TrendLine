@@ -1,5 +1,5 @@
-from src.singleton import SingletonMeta
-from src.alpaca_client import AlpacaClient
+from src.base.singleton import SingletonMeta
+from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.requests import GetAssetsRequest
 
 

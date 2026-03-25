@@ -1,4 +1,4 @@
-from src.singleton import SingletonMeta
+from src.base.singleton import SingletonMeta
 from alpaca.trading.client import TradingClient
 from src.configs import ALPACA_CHOSEN_API_ID, ALPACA_CHOSEN_SECRET_KEY, USE_PAPER
 

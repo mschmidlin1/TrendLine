@@ -137,6 +137,109 @@ The system provides flexible configuration for various parameters:
 
 ## Technical Architecture
 
+### Class dependency graph (from `main.py`)
+
+This section lists **project-defined classes** only (no pip-installed libraries). `main.py` is the entry point; it is not a class but wires the top-level services. Classes such as `CryptoTrader`, `StopWatch`, and modules not imported by `main.py` are out of scope.
+
+**Mermaid in Cursor / VS Code:** The built-in Markdown preview **does not include a Mermaid renderer**. You will see the fenced ` ```mermaid ` block as plain source code, not a diagram—that is expected until you add support (see [Troubleshooting Mermaid preview](#troubleshooting-mermaid-preview) below). The text tree is always readable without any extension. GitHub’s web UI renders Mermaid in README files without extra setup.
+
+#### Text dependency tree
+
+Each line under `main.py` is a class constructed or used from the entry script. Indentation shows “depends on” / composition; `extends` is inheritance.
+
+```
+main.py
+├── MarketMonitorService
+│   ├── SingletonMeta          (metaclass)
+│   ├── AlpacaClient
+│   │   └── SingletonMeta
+│   └── LoggingService
+│       └── SingletonMeta
+├── NewsScrapingService
+│   ├── SingletonMeta
+│   └── LoggingService
+├── SentimentService
+│   ├── SingletonMeta
+│   ├── LoggingService
+│   ├── TickerService
+│   │   ├── SingletonMeta
+│   │   └── AlpacaClient
+│   ├── Timer
+│   └── SentimentResponse      (dataclass; produced by analyze flow)
+├── TimingService
+│   └── SingletonMeta
+├── LoggingService
+│   └── SingletonMeta
+├── StockTrader
+│   ├── SingletonMeta
+│   └── Trader                 (base class; inheritance)
+│       ├── AlpacaClient
+│       ├── LoggingService
+│       └── TickerService
+└── TradeLifecycleManager
+    ├── SingletonMeta
+    ├── AlpacaClient
+    ├── LoggingService
+    └── SentimentResponse      (typed payloads when archiving)
+```
+
+**Shared roles:** `SingletonMeta` ensures a single instance for each singleton service. `AlpacaClient` is shared by `MarketMonitorService`, `Trader` (and thus `StockTrader`), and `TradeLifecycleManager`; `TickerService` also holds an `AlpacaClient`. `SentimentResponse` is created inside `SentimentService` and passed into `TradeLifecycleManager.archive_news_entry`.
+
+#### Mermaid version (renders on github.com; see troubleshooting for local preview)
+
+```mermaid
+flowchart TD
+    M["main.py"]
+    M --> MMS[MarketMonitorService]
+    M --> NSS[NewsScrapingService]
+    M --> SS[SentimentService]
+    M --> TSvc[TimingService]
+    M --> LS[LoggingService]
+    M --> ST[StockTrader]
+    M --> TLC[TradeLifecycleManager]
+
+    MMS --> SM[SingletonMeta]
+    MMS --> AC[AlpacaClient]
+    MMS --> LS
+
+    NSS --> SM
+    NSS --> LS
+
+    SS --> SM
+    SS --> LS
+    SS --> TKS[TickerService]
+    SS --> TI[Timer]
+    SS --> SR[SentimentResponse]
+
+    TSvc --> SM
+    LS --> SM
+
+    ST --> SM
+    ST --> TR[Trader]
+    TR --> AC
+    TR --> LS
+    TR --> TKS
+
+    TLC --> SM
+    TLC --> AC
+    TLC --> LS
+    TLC --> SR
+
+    TKS --> SM
+    TKS --> AC
+    AC --> SM
+```
+
+##### Troubleshooting Mermaid preview
+
+| Symptom | Cause | What to do |
+|--------|--------|------------|
+| You see the mermaid fenced code block as monospace text, not a diagram | The default Markdown preview has **no Mermaid engine** | Install **[Markdown Preview Mermaid Support](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid)** (ID: `bierner.markdown-mermaid`). This repo lists it under **Recommended Extensions** for Cursor/VS Code—open the Extensions view and install workspace recommendations if prompted. |
+| Diagram shows “Syntax error” or a red error in preview | Rare: Mermaid version or reserved ID | This README uses `flowchart TD` and quoted `["main.py"]`. If an error persists, check the **Output** / **Developer Tools** console for the extension’s message. |
+| Preview is blank or frozen | Extension conflict or very large diagram | Reload the window (`Developer: Reload Window`) or temporarily disable other Markdown preview extensions. |
+
+After installing **Markdown Preview Mermaid Support**, open this README, run **Markdown: Open Preview** (or the preview shortcut), and the diagram above should render. Without that extension (or an equivalent), **no** amount of fixing the Mermaid source will draw a diagram in the stock preview.
+
 ### Components
 
 1. **News Scraper**

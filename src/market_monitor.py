@@ -1,17 +1,17 @@
-from src.singleton import SingletonMeta
-from src.tl_logger import LoggingService
-from src.alpaca_client import AlpacaClient
+from src.base.singleton import SingletonMeta
+from src.base.tl_logger import LoggingService
+from src.base.alpaca_client import AlpacaClient
 import datetime
 import pytz
     
 
-class MarketMonitor(metaclass=SingletonMeta):
+class MarketMonitorService(metaclass=SingletonMeta):
     """Market Monitor can tell you if the market is open or not. """
     def __init__(self, alpaca_client: AlpacaClient = AlpacaClient(), TIMEZONE="US/Eastern"):
         self.TIMEZONE = TIMEZONE
         self.alpaca_client: AlpacaClient = alpaca_client
         self.trading_client = self.alpaca_client.trading_client
-        self.logger = LoggingService()
+        self._logger = LoggingService()
         self.tzinfo = pytz.timezone(self.TIMEZONE)
         self.update()
 

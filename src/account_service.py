@@ -1,10 +1,10 @@
-from src.singleton import SingletonMeta
+from src.base.singleton import SingletonMeta
 from alpaca.trading.requests import GetPortfolioHistoryRequest
-from src.alpaca_client import AlpacaClient
+from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.client import TradingClient
 from datetime import datetime
 
-class AccountService(metaclass=SingletonMeta):
+class HistoricalDataService(metaclass=SingletonMeta):
     def __init__(self):
         self.alpaca_client = AlpacaClient()
         self.trading_client: TradingClient = self.alpaca_client.trading_client

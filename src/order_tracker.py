@@ -1,5 +1,5 @@
-from src.singleton import SingletonMeta
-from src.alpaca_client import AlpacaClient
+from src.base.singleton import SingletonMeta
+from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.client import TradingClient
 from alpaca.trading.models import Order
 import pandas as pd
@@ -8,9 +8,9 @@ from datetime import datetime
 from uuid import UUID
 from typing import List
 from alpaca.trading.enums import OrderStatus
-from src.tl_logger import LoggingService
+from src.base.tl_logger import LoggingService
 
-class SellTracker(metclass=SingletonMeta):
+class OrderTracker(metclass=SingletonMeta):
     """
     `log_purchase` - log a purchase that will sell after a fixed time
 
@@ -26,7 +26,7 @@ class SellTracker(metclass=SingletonMeta):
         self.trading_client: TradingClient = self.alpaca_client.trading_client
         self.tracked: List[Order] = []
         self.ready_to_sell: List[Order] = []
-        self.logger = LoggingService()
+        self._logger = LoggingService()
     
     def update(self):
         """
@@ -36,7 +36,7 @@ class SellTracker(metclass=SingletonMeta):
         for order in self.tracked:
             new_tracked.append(self.trading_client.get_order_by_id(order.id))
         self.tracked = new_tracked
-        self.check_statuses()
+        self._check_statuses()
 
     def log_purchase(self, order: Order):
         """
@@ -44,7 +44,7 @@ class SellTracker(metclass=SingletonMeta):
         """
         self.tracked.append(order)
 
-    def check_statuses(self):
+    def _check_statuses(self):
         """
         This method checks the status of each id in the dataframe by querying the id with the trading client (self.trading_client.get_order_by_id(order_id)).
 
@@ -64,28 +64,12 @@ class SellTracker(metclass=SingletonMeta):
                     else:
                         filtered_orders.append(order)
                 else:
-                    self.logger.log_warning(f"Order for {order.symbol} with QTY {order.qty} and NOTIONAL {order.notional} will stop being tracked due to status {order.status}")
+                    self._logger.log_warning(f"Order for {order.symbol} with QTY {order.qty} and NOTIONAL {order.notional} will stop being tracked due to status {order.status}")
                     #do nothing here except log. The status is one of CANCELED, EXPIRED, REJECTED so we want to stop trackinng it
             else:
                 #these orders are still open so they need to keep being tracked
                 filtered_orders.append(order)
         self.tracked = filtered_orders
-
-
-    # def log_to_sell(self, order: Order):
-    #     """
-    #     First get the current date time. Then add the `MARKET_HOLD_TIME`. This will give you when the stock should be sold.
-    #     log the id, stock, quantity, price, and when it should be sold. This information will go in the `to_sell_df` dataframe.
-    #     This method would get called by `check_statuses()` in order to log items that need to be sold.
-    #     """
-    #     order.symbol
-    #     order.qty
-    #     order.id#uuid.UUID
-    #     order.notional
-    #     order.filled_at
-    #     now = datetime.now()
-    #     sell_time = now + MARKET_HOLD_TIME
-    #     pass
 
     def clear_ready_to_sell(self) -> List[Order]:
         """

@@ -14,9 +14,9 @@ from datetime import datetime
 from typing import Optional, Dict, List
 
 from src.configs import ALPACA_CHOSEN_SECRET_KEY
-from src.tl_logger import LoggingService
-from src.singleton import SingletonMeta
-from src.alpaca_client import AlpacaClient
+from src.base.tl_logger import LoggingService
+from src.base.singleton import SingletonMeta
+from src.base.alpaca_client import AlpacaClient
 from src.ticker_service import TickerService
 from src.converters import orders_to_dataframe
 
@@ -51,7 +51,7 @@ class Trader():
         """
         self.alpaca_client: AlpacaClient = alpaca_client
         self.trading_client = self.alpaca_client.trading_client
-        self.logger = LoggingService()
+        self._logger = LoggingService()
         self.ticker_service = TickerService()
 
     def get_account(self) -> None:
@@ -207,10 +207,10 @@ class Trader():
             price = self.get_ask_price(symbol)*quantity
         self.get_buying_power()
         if price>self.buying_power:
-            self.logger.log_warning("Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
+            self._logger.log_warning("Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
             return None
         elif quantity is None:
-            self.logger.log_info(f"Buying {price} dollars of {symbol}.")
+            self._logger.log_info(f"Buying {price} dollars of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 notional=price,
@@ -218,7 +218,7 @@ class Trader():
                                 time_in_force=time_in_force
                             )
         else:
-            self.logger.log_info(f"Buying {quantity} shares of {symbol}.")
+            self._logger.log_info(f"Buying {quantity} shares of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 qty=quantity,
@@ -239,7 +239,7 @@ class Trader():
         self.trading_client.close_all_positions(cancel_orders=cancel_orders)
 
     def sell(self, symbol: str, quantity: Optional[float] = None, price: Optional[float] = None,
-             side: OrderSide = OrderSide.SELL, time_in_force: TimeInForce = TimeInForce.GTC) -> int:
+             side: OrderSide = OrderSide.SELL, time_in_force: TimeInForce = TimeInForce.GTC) -> Order:
         """
         Execute a sell order for the specified symbol.
         
@@ -254,7 +254,7 @@ class Trader():
             time_in_force (TimeInForce, optional): Order time in force. Defaults to TimeInForce.GTC.
             
         Returns:
-            int: 0 if order was successfully placed.
+            Order: The submitted order object from Alpaca.
             
         Raises:
             ValueError: If symbol is not available or if both/neither quantity and price are specified.
@@ -264,7 +264,7 @@ class Trader():
             raise ValueError("Must specify either quantity or price.")
         
         if quantity is None:
-            self.logger.log_info(f"Selling {price} dollars of {symbol}.")
+            self._logger.log_info(f"Selling {price} dollars of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 notional=price,
@@ -272,16 +272,16 @@ class Trader():
                                 time_in_force=time_in_force
                             )
         else:
-            self.logger.log_info(f"Selling {quantity} shares of {symbol}.")
+            self._logger.log_info(f"Selling {quantity} shares of {symbol}.")
             market_order_data = MarketOrderRequest(
                                 symbol=symbol,
                                 qty=quantity,
                                 side=side,
                                 time_in_force=time_in_force
                             )
-        market_order = self.trading_client.submit_order(market_order_data)
+        market_order: Order = self.trading_client.submit_order(market_order_data)
         self.get_buying_power()
-        return 0
+        return market_order
 
     def cancel_all_orders(self) -> List:
         """
@@ -314,7 +314,7 @@ class StockTrader(Trader, metaclass=SingletonMeta):
             **kwargs: Arbitrary keyword arguments passed to parent Trader class.
         """
         super().__init__(*args, **kwargs)
-        self.logger.log_debug("Instace of Stock_Trader() class created.")
+        self._logger.log_debug("Instace of Stock_Trader() class created.")
         self.asset_class = 'us_equity'
 
     def get_quote(self, symbol: str) -> Quote:
@@ -376,7 +376,7 @@ class CryptoTrader(Trader, metaclass=SingletonMeta):
             **kwargs: Arbitrary keyword arguments passed to parent Trader class.
         """
         super().__init__(*args, **kwargs)
-        self.logger.log_debug("Instace of Crypto_Trader() class created.")
+        self._logger.log_debug("Instace of Crypto_Trader() class created.")
         self.asset_class = 'crypto'
 
     def get_quote(self, symbol: str):

@@ -1,30 +1,12 @@
-from src.singleton import SingletonMeta
+from src.base.singleton import SingletonMeta
+from src.base.sentiment_response import SentimentResponse
 import ollama
-from src.timer import Timer
+from src.base.timer import Timer
 import ollama
 import re
-from dataclasses import dataclass
 from typing import Tuple, List
-from src.tl_logger import LoggingService
+from src.base.tl_logger import LoggingService
 from src.ticker_service import TickerService
-
-@dataclass
-class SentimentResponse:
-    """
-    Data class representing the response from sentiment analysis.
-    
-    Attributes:
-        sentiment (str): The sentiment classification (positive, neutral, or negative).
-        ticker (str): The stock ticker symbol extracted from the text.
-        format_match (bool): Whether the LLM response matched the expected format.
-        ticker_found (bool): Whether a valid ticker symbol was found in the response.
-        raw_response (str): The raw, unprocessed response from the LLM.
-    """
-    sentiment: str
-    ticker: str
-    format_match: bool
-    ticker_found: bool
-    raw_response: str
 
 class SentimentService(metaclass=SingletonMeta):
     """
@@ -59,7 +41,7 @@ class SentimentService(metaclass=SingletonMeta):
         3. Extract the main 'Company' mentioned and reply with the ticker symbol of the company. If there is no associated publicly traded company, reply with "None" for the ticker.
         Response Format: [Sentiment] | [Ticker]
         """
-        self.logger = LoggingService()
+        self._logger = LoggingService()
         self.ticker_service: TickerService = TickerService()
     
     def analyze_sentiment(self, text: str) -> SentimentResponse:
@@ -88,7 +70,7 @@ class SentimentService(metaclass=SingletonMeta):
         )
         timer.start()
         ellapsed_time = timer.elapsed_str()
-        self.logger.log_info(f"Sentimer predicted by ollama. Took {ellapsed_time}")
+        self._logger.log_info(f"Sentiment predicted by ollama. Took {ellapsed_time}")
 
         response = full_response['message']['content']
         return self._parse_sentiment(response)
@@ -123,7 +105,7 @@ class SentimentService(metaclass=SingletonMeta):
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False
         except:
-            self.logger.log_error(f"SentimentService errored when trying to parse this response: '{response}'")
+            self._logger.log_error(f"SentimentService errored when trying to parse this response: '{response}'")
             format_match = False
             ticker_found = False
             sentiment = ""

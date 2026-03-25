@@ -1,7 +1,8 @@
 import unittest
 import sys
 import os
-from src.sentiment_service import SentimentResponse, SentimentService
+from src.sentiment_service import SentimentService
+from src.base.sentiment_response import SentimentResponse
 # Add src directory to path
 
 

@@ -6,7 +6,7 @@ from src.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
 # Add src directory to path
 from alpaca.data.models.quotes import Quote
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
-from src.alpaca_client import AlpacaClient
+from src.base.alpaca_client import AlpacaClient
 from src.converters import orders_to_dataframe, positions_to_dataframe
 
 class TestTrader(unittest.TestCase):
