@@ -44,7 +44,26 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
         self._article_id_index: Dict[str, int] = {}
         self._buy_order_id_index: Dict[str, str] = {}
         self.ready_to_sell: List[Order] = []
-        self._logger.log_debug("Instance of TradeLifecycleManager() class created.")
+
+    def get_persistent_snapshot(self) -> Dict[str, Any]:
+        """Return in-memory state to be persisted across restarts."""
+        return {
+            'archived_entries': self.archived_entries,
+            '_article_id_index': self._article_id_index,
+            '_buy_order_id_index': self._buy_order_id_index,
+            'ready_to_sell': self.ready_to_sell,
+        }
+
+    def restore_from_persistent_snapshot(self, snapshot: Dict[str, Any]) -> None:
+        """Restore state from :meth:`get_persistent_snapshot`."""
+        required = ('archived_entries', '_article_id_index', '_buy_order_id_index', 'ready_to_sell')
+        for key in required:
+            if key not in snapshot:
+                raise ValueError(f"Invalid persistent snapshot: missing '{key}'")
+        self.archived_entries = snapshot['archived_entries']
+        self._article_id_index = snapshot['_article_id_index']
+        self._buy_order_id_index = snapshot['_buy_order_id_index']
+        self.ready_to_sell = snapshot['ready_to_sell']
 
     def archive_news_entry(
         self,
@@ -336,5 +355,4 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
             }
             rows.append(row)
 
-        self._logger.log_info(f"Generated DataFrame with {len(rows)} entries.")
         return pd.DataFrame(rows)

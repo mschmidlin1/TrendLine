@@ -1,7 +1,7 @@
 from src.base.singleton import SingletonMeta
 from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.requests import GetAssetsRequest
-
+from typing import Dict
 
 
 
@@ -10,6 +10,7 @@ class TickerService(metaclass=SingletonMeta):
     def __init__(self, alpaca_client: AlpacaClient = AlpacaClient()):
         self.alpaca_client = alpaca_client
         self.trading_client = self.alpaca_client.trading_client
+        self.asset_dict = None
 
     def get_available_symbols(self, asset_class: str) -> list[str]:
         """
@@ -25,6 +26,11 @@ class TickerService(metaclass=SingletonMeta):
         assets = self.trading_client.get_all_assets(search_params)
         self.asset_dict = {asset.symbol: asset.name for asset in assets}
         return list(self.asset_dict.keys())
+
+    def lookup_stock_name(self, symbol: str) -> str:
+        if self.asset_dict is None:
+            self.get_available_symbols("us_equity")
+        return self.asset_dict[symbol]
     
     def is_stock_symbol(self, symbol: str):
         available_symbols = self.get_available_symbols("us_equity")

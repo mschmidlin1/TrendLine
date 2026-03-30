@@ -1,0 +1,8 @@
+filelock>=3.13.0
+streamlit
+streamlit-aggrid
+plotly
+pandas
+numpy
+alpaca-py
+feedparser

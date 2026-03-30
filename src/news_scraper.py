@@ -8,17 +8,37 @@ from src.configs import RSS_FEED_URLS
 from src.base.singleton import SingletonMeta
 import feedparser
 from feedsearch import search
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from src.base.tl_logger import LoggingService
 from feedparser.util import FeedParserDict
 
 class NewsScrapingService(metaclass=SingletonMeta):
-    def __init__(self, rss_feeds: List[str] = RSS_FEED_URLS):
+    def __init__(self, rss_feeds: Dict[str, str] = RSS_FEED_URLS, skip_initial_scrape: bool = False):
         self._logger = LoggingService()
         self.rss_feeds: Dict[str, str] = rss_feeds
         self.served_articles: set = set()
-        self.news_data: Dict[str, FeedParserDict] = self._scrape_news()
+        if skip_initial_scrape:
+            self.news_data = {name: feedparser.parse('') for name in self.rss_feeds}
+        else:
+            self.news_data = self._scrape_news()
         self._logger.log_info("Scraping service initialized")
+
+    def get_persistent_snapshot(self) -> Dict[str, Any]:
+        """Return in-memory state to be persisted across restarts."""
+        return {
+            'rss_feeds': self.rss_feeds,
+            'served_articles': self.served_articles,
+            'news_data': self.news_data,
+        }
+
+    def restore_from_persistent_snapshot(self, snapshot: Dict[str, Any]) -> None:
+        """Restore state from :meth:`get_persistent_snapshot`."""
+        for key in ('rss_feeds', 'served_articles', 'news_data'):
+            if key not in snapshot:
+                raise ValueError(f"Invalid persistent snapshot: missing '{key}'")
+        self.rss_feeds = snapshot['rss_feeds']
+        self.served_articles = snapshot['served_articles']
+        self.news_data = snapshot['news_data']
 
     def _scrape_news(self) -> Dict[str, FeedParserDict]:
         """

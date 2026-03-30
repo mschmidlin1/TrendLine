@@ -36,6 +36,9 @@ STDOUT_LOG_LEVEL = "INFO"
 LOG_FILE = "logs.txt"
 LOG_PATH = "logs"
 
+# On-disk snapshots for PersistentDataService (project root relative)
+PERSISTENT_DATA_DIR = Path("persistent_data")
+
 RSS_FEED_URLS = {
     #"Reuters": "https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best/",
     "NPR": "https://feeds.npr.org/1001/rss.xml",

@@ -42,7 +42,7 @@ class SentimentService(metaclass=SingletonMeta):
         Response Format: [Sentiment] | [Ticker]
         """
         self._logger = LoggingService()
-        self.ticker_service: TickerService = TickerService()
+        self._ticker_service: TickerService = TickerService()
     
     def analyze_sentiment(self, text: str) -> SentimentResponse:
         """
@@ -68,7 +68,7 @@ class SentimentService(metaclass=SingletonMeta):
                 {'role': 'user', 'content': text},        # The Data
             ]
         )
-        timer.start()
+        timer.stop()
         ellapsed_time = timer.elapsed_str()
         self._logger.log_info(f"Sentiment predicted by ollama. Took {ellapsed_time}")
 
@@ -100,7 +100,7 @@ class SentimentService(metaclass=SingletonMeta):
                 ticker_found = False
             if ticker=="":
                 ticker_found = False
-            if not self.ticker_service.is_stock_symbol(ticker):
+            if not self._ticker_service.is_stock_symbol(ticker):
                 ticker_found = False
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False

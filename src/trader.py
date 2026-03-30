@@ -203,11 +203,15 @@ class Trader():
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
         #check to make sure you have enough buying power
-        if price==None:
-            price = self.get_ask_price(symbol)*quantity
+        try:
+            if price==None:
+                price = self.get_ask_price(symbol)*quantity
+        except KeyError as e:
+            self._logger.log_warning(f"Could not get quote for Symbol {symbol}. Abandoning stock buy.")
+            return None
         self.get_buying_power()
         if price>self.buying_power:
-            self._logger.log_warning("Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
+            self._logger.log_warning(f"Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
             return None
         elif quantity is None:
             self._logger.log_info(f"Buying {price} dollars of {symbol}.")

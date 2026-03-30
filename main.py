@@ -7,20 +7,41 @@ from src.base.tl_logger import LoggingService
 from src.trader import StockTrader
 from src.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
 from src.trade_lifecycle_manager import TradeLifecycleManager
+from src.persistent_data_service import PersistentDataService
 
+import atexit
+import signal
+import sys
 import time
 from alpaca.trading.enums import TimeInForce
 from alpaca.trading.models import Order
 from typing import List
 
 
-sentiment_service = SentimentService()#analyzes the sentimet of news headlines
-news_scraper = NewsScrapingService()#scrapes data from rss feeds defined in configs
-market_monitor = MarketMonitorService()#tells you if the market is open and how long until it opens
-timing_service = TimingService()#keeps track of the period of the app. Uses a set time from configs
-logger = LoggingService()#for logging information
-stock_trader = StockTrader()#used to buy and sell stocks through Alpaca-py
+def _shutdown_persist() -> None:
+    PersistentDataService().save_all(reason="shutdown")
+
+
+def _handle_stop_signal(signum, frame) -> None:
+    PersistentDataService().save_all(reason="shutdown")
+    sys.exit(0)
+
+
+sentiment_service = SentimentService()  # analyzes the sentiment of news headlines
+news_scraper = NewsScrapingService(skip_initial_scrape=True)  # state restored by PersistentDataService when present
+market_monitor = MarketMonitorService()  # tells you if the market is open and how long until it opens
+timing_service = TimingService()  # keeps track of the period of the app. Uses a set time from configs
+logger = LoggingService()  # for logging information
+stock_trader = StockTrader()  # used to buy and sell stocks through Alpaca-py
 trade_manager = TradeLifecycleManager()  # manages full trade lifecycle: news archival, sentiment, buy/sell order tracking, hold timing
+persistent_data = PersistentDataService()
+persistent_data.load_all()
+
+atexit.register(_shutdown_persist)
+if hasattr(signal, "SIGINT"):
+    signal.signal(signal.SIGINT, _handle_stop_signal)
+if hasattr(signal, "SIGTERM"):
+    signal.signal(signal.SIGTERM, _handle_stop_signal)
 
 
 ready_to_sell_orders: List[Order] = []
@@ -64,8 +85,10 @@ while True:
 
     else:
         wait_time_seconds = timing_service.time_until_next_scrape()
-        logger.log_info(f"Sleeping until next iteration: {wait_time_seconds:.1f}s")
+        formatted_wait_time = f"{int(wait_time_seconds // 60)}m {wait_time_seconds % 60:.1f}s"
+        logger.log_info(f"Sleeping until next iteration: {formatted_wait_time}")
         time.sleep(wait_time_seconds)
+        logger.log_info(f"Woke up, proceeding with next iteration")
 
 
 
@@ -90,5 +113,7 @@ while True:
         sell_order: Order = stock_trader.sell(buy_order.symbol, quantity=int(buy_order.qty), time_in_force=TimeInForce.GTC)
         if sell_order is not None:
             trade_manager.log_sell_order(buy_order, sell_order)
+
+    persistent_data.save_all(reason="flush")
 
 

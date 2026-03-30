@@ -3,6 +3,8 @@ from alpaca.trading.requests import GetPortfolioHistoryRequest
 from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.client import TradingClient
 from datetime import datetime
+from alpaca.trading.models import Order, Position
+from typing import List
 
 class HistoricalDataService(metaclass=SingletonMeta):
     def __init__(self):
@@ -31,17 +33,22 @@ class HistoricalDataService(metaclass=SingletonMeta):
         
         # Execute the query
         return self.trading_client.get_portfolio_history(history_params)
+
+    def get_all_positions(self) -> List[Position]:
+        """Open stock and crypto positions for the account."""
+        return self.trading_client.get_all_positions()
+
     def get_history_1d(self):
         """Last 24 hours at 1-minute resolution."""
-        return self.get_equity_history(period="1D", timeframe="1Min")
+        return self.get_equity_history(period="1D", timeframe="1Min", intraday_reporting="continuous")
 
     def get_history_1w(self):
         """Last 7 days at 1-hour resolution."""
-        return self.get_equity_history(period="1W", timeframe="1H")
+        return self.get_equity_history(period="1W", timeframe="1H", intraday_reporting="continuous")
 
     def get_history_1m(self):
         """Last 30 days at 1-hour resolution."""
-        return self.get_equity_history(period="1M", timeframe="1H")
+        return self.get_equity_history(period="1M", timeframe="1H", intraday_reporting="continuous")
 
     def get_history_3m(self):
         """Last 90 days at 1-day resolution."""
@@ -55,7 +62,7 @@ class HistoricalDataService(metaclass=SingletonMeta):
 
     def get_history_1y(self):
         """Last 365 days at 1-day resolution."""
-        return self.get_equity_history(period="1Y", timeframe="1D")
+        return self.get_equity_history(period="12M", timeframe="1D")
 
     def get_history_all(self):
         """Entire account history at 1-day resolution."""
