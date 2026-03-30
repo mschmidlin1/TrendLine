@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-REM Stops the three windows opened by run_front_backend_ngrok.bat (by title).
+REM Stops the three windows opened by scripts\run.bat (by title).
 REM Also force-stops ngrok in case the window title no longer matches.
 
 taskkill /FI "WINDOWTITLE eq TrendLine Backend" /F >nul 2>&1

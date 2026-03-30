@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from src.base.singleton import SingletonMeta
 from src.base.sentiment_response import SentimentResponse
 from src.base.tl_logger import LoggingService
@@ -193,7 +194,7 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
 
                     if updated_buy_order.status == OrderStatus.FILLED:
                         sell_time = updated_buy_order.filled_at + MARKET_HOLD_TIME
-                        if datetime.now() >= sell_time:
+                        if datetime.now(timezone.utc) >= sell_time:
                             self.ready_to_sell.append(updated_buy_order)
                             entry['buy_order_terminal'] = True
                             self._logger.log_info(
