@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stops services started by run_front_backend_ngrok.sh (PID files + ngrok pattern).
+# Stops services started by run.sh (PID files + ngrok pattern).
 # Mirrors stop_front_backend_ngrok.bat.
 
 set -u

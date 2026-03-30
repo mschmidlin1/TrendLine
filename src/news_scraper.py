@@ -1,5 +1,3 @@
-from newspaper import Article
-import newspaper
 import pandas as pd
 import numpy as np
 import datetime
@@ -7,7 +5,6 @@ import os
 from src.configs import RSS_FEED_URLS
 from src.base.singleton import SingletonMeta
 import feedparser
-from feedsearch import search
 from typing import List, Dict, Tuple, Any
 from src.base.tl_logger import LoggingService
 from feedparser.util import FeedParserDict

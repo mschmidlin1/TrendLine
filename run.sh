@@ -103,7 +103,7 @@ if gui_terminal_available; then
       sleep 3
       if try_open_terminal "TrendLine ngrok" "$INNER_NGROK"; then
         echo "Started backend, Streamlit (port $PORT), and ngrok in separate windows."
-        echo "To stop all: run ./stop_front_backend_ngrok.sh, or close each terminal window."
+        echo "To stop all: run ./stop.sh, or close each terminal window."
         exit 0
       fi
     fi
@@ -114,5 +114,5 @@ fi
 
 echo "No GUI terminal session or emulator found; starting in background."
 run_fallback_background
-echo "To stop all: run ./stop_front_backend_ngrok.sh"
+echo "To stop all: run ./stop.sh"
 exit 0

@@ -6,3 +6,4 @@ pandas
 numpy
 alpaca-py
 feedparser
+ollama
