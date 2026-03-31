@@ -83,6 +83,7 @@ class LoggingService(metaclass=SingletonMeta):
         logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
         logging.getLogger("urllib3.connection").setLevel(logging.WARNING)
         logging.getLogger("PIL").setLevel(logging.WARNING)
+        logging.getLogger("watchdog").setLevel(logging.WARNING)
     def log_debug(self, message: str, **kwargs):
         """
         Logs a debug message.

@@ -35,6 +35,7 @@ FILE_LOG_LEVEL = "DEBUG"
 STDOUT_LOG_LEVEL = "INFO"
 LOG_FILE = "logs.txt"
 LOG_PATH = "logs"
+LOG_VIEWER_MAX_LINES = 5000
 
 # On-disk snapshots for PersistentDataService (project root relative)
 PERSISTENT_DATA_DIR = Path("persistent_data")

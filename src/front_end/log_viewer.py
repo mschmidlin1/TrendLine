@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import streamlit as st
 from filelock import FileLock
+from src.configs import LOG_VIEWER_MAX_LINES
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 
@@ -47,11 +48,14 @@ def _read_log_lines(path: Path, lock_path: Path, timeout_s: float = 60.0) -> Lis
 
     lock = FileLock(str(lock_path), timeout=timeout_s)
     lock.acquire()
+    lines = []
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            return f.read().splitlines()
+            lines = f.read().splitlines()
     finally:
         lock.release()
+
+    return lines
 
 
 def _parse_line(line: str) -> Tuple[str, str, str]:
@@ -68,22 +72,26 @@ def _parse_line(line: str) -> Tuple[str, str, str]:
 
 
 def _lines_to_sorted_dataframe(lines: List[str]) -> pd.DataFrame:
-    rows: List[dict] = []
+    levels: List[str] = []
+    ts_strings: List[str] = []
+    datetime_display: List[str] = []
+    messages: List[str] = []
     for ln in lines:
         level, ts, msg = _parse_line(ln)
-        parsed = pd.to_datetime(ts, errors="coerce") if ts else pd.NaT
-        datetime_display = ts if ts else "—"
-        rows.append(
-            {
-                "_dt": parsed,
-                "Datetime": datetime_display,
-                "Level": level,
-                "Message": msg,
-            }
-        )
-    df = pd.DataFrame(rows)
+        levels.append(level)
+        ts_strings.append(ts)
+        datetime_display.append(ts if ts else "—")
+        messages.append(msg)
+    df = pd.DataFrame(
+        {
+            "Datetime": datetime_display,
+            "Level": levels,
+            "Message": messages,
+        }
+    )
     if df.empty:
         return pd.DataFrame(columns=["Datetime", "Level", "Message"])
+    df["_dt"] = pd.to_datetime(ts_strings, errors="coerce")
     df = df.sort_values("_dt", ascending=False, na_position="last")
     return df.drop(columns=["_dt"]).reset_index(drop=True)
 
@@ -102,6 +110,7 @@ def render_log_viewer() -> None:
                 st.warning("Log file not found yet (expected `logs/logs.txt`).")
                 return
 
+            lines = lines[-LOG_VIEWER_MAX_LINES:]
             df = _lines_to_sorted_dataframe(lines)
 
             gb = GridOptionsBuilder.from_dataframe(df)
