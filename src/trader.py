@@ -2,6 +2,7 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
 from alpaca.trading.requests import GetAssetsRequest
+from alpaca.common.exceptions import APIError
 from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest, CryptoLatestQuoteRequest
 from alpaca.data.requests import CryptoBarsRequest
@@ -202,6 +203,11 @@ class Trader():
         #check function imputs
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
+
+        if not self.ticker_service.is_tradable_stock_symbol(symbol):
+            self._logger.log_warning(f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping buy.")
+            return None
+
         #check to make sure you have enough buying power
         try:
             if price==None:
@@ -229,7 +235,11 @@ class Trader():
                                 side=side,
                                 time_in_force=time_in_force
                             )
-        market_order: Order = self.trading_client.submit_order(market_order_data)
+        try:
+            market_order: Order = self.trading_client.submit_order(market_order_data)
+        except APIError as e:
+            self._logger.log_warning(f"Alpaca rejected buy for '{symbol}'. Skipping. Error: {e}")
+            return None
         self.get_buying_power()
         return market_order
 
@@ -266,6 +276,10 @@ class Trader():
         #check function imputs
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
+
+        if not self.ticker_service.is_tradable_stock_symbol(symbol):
+            self._logger.log_warning(f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping sell.")
+            return None
         
         if quantity is None:
             self._logger.log_info(f"Selling {price} dollars of {symbol}.")
@@ -283,7 +297,11 @@ class Trader():
                                 side=side,
                                 time_in_force=time_in_force
                             )
-        market_order: Order = self.trading_client.submit_order(market_order_data)
+        try:
+            market_order: Order = self.trading_client.submit_order(market_order_data)
+        except APIError as e:
+            self._logger.log_warning(f"Alpaca rejected sell for '{symbol}'. Skipping. Error: {e}")
+            return None
         self.get_buying_power()
         return market_order
 

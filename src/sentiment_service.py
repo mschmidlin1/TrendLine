@@ -100,7 +100,7 @@ class SentimentService(metaclass=SingletonMeta):
                 ticker_found = False
             if ticker=="":
                 ticker_found = False
-            if not self._ticker_service.is_stock_symbol(ticker):
+            if not self._ticker_service.is_tradable_stock_symbol(ticker):
                 ticker_found = False
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False
