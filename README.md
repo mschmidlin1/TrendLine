@@ -1,5 +1,7 @@
 ![Logo](resources/logo_big.png)
 
+Current link: https://4700-38-162-181-160.ngrok-free.app/
+
 # Temporary Notes and To-do's
 - We need to figure out some way to generate the generic "how much money we have" plot on our own. Alpaca may have some utility for this to make it easier. We can probably make another simple service for gathering this data and use the alpaca client singleton
 - Test the stock sell for a price and see if you need the time limit to be a day (similar to when you buy a stock for a price)

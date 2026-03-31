@@ -211,3 +211,11 @@ __marimo__/
 .vscode/
 
 logs/
+
+.trendline_backend.pid
+
+.trendline_ngrok.pid
+
+.trendline_port
+
+.trendline_streamlit.pid
