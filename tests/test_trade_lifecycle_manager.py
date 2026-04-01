@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from src.trade_lifecycle_manager import TradeLifecycleManager
@@ -790,6 +790,27 @@ class TestTradeLifecycleManager(unittest.TestCase):
         self.assertEqual(row['link'], "https://example.com/full-article")
         self.assertEqual(row['published_date'], "Tue, 25 Mar 2026 14:00:00 GMT")
         self.assertEqual(row['summary'], "This is the full article summary.")
+
+    def test_restore_migrates_naive_archived_at(self):
+        """Naive archived_at from old snapshots becomes UTC-aware on restore."""
+        manager = TradeLifecycleManager()
+        naive_at = datetime(2024, 6, 1, 12, 0, 0)
+        snapshot = {
+            "archived_entries": [
+                {
+                    "article_id": "https://example.com/migrated",
+                    "archived_at": naive_at,
+                }
+            ],
+            "_article_id_index": {},
+            "_buy_order_id_index": {},
+            "ready_to_sell": [],
+        }
+        manager.restore_from_persistent_snapshot(snapshot)
+        at = manager.archived_entries[0]["archived_at"]
+        self.assertIsNotNone(at.tzinfo)
+        self.assertEqual(at.tzinfo, timezone.utc)
+        self.assertEqual(at.timestamp(), naive_at.timestamp())
 
 
 if __name__ == '__main__':

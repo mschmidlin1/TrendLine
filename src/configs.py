@@ -3,8 +3,10 @@ import os
 import tomllib
 from pathlib import Path
 from datetime import timedelta
-MARKET_HOLD_TIME = timedelta(days=0, hours=8)
+MARKET_HOLD_TIME = timedelta(days=0, hours=4)
 SCRAPE_FREQUENCY = timedelta(minutes=10)
+# Display timezone for Streamlit (US equity session; matches MarketMonitorService US/Eastern)
+DISPLAY_TIMEZONE_NAME = "America/New_York"
 BASE_PURCHASE_DOLLARS = 10.0
 BASE_PURCHASE_QTY = 1
 #logging settings

@@ -4,11 +4,11 @@ from src.base.sentiment_response import SentimentResponse
 from src.base.tl_logger import LoggingService
 from src.base.alpaca_client import AlpacaClient
 from src.configs import MARKET_HOLD_TIME
+from src.base.datetime_utils import ensure_utc, naive_local_to_utc
 from alpaca.trading.client import TradingClient
 from alpaca.trading.models import Order
 from alpaca.trading.enums import OrderStatus
 import pandas as pd
-from datetime import datetime
 from typing import List, Dict, Optional, Any
 
 
@@ -27,6 +27,9 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
         _article_id_index (Dict[str, int]): Index mapping article_id to position in archived_entries.
         _buy_order_id_index (Dict[str, str]): Index mapping buy order ID to article_id.
         ready_to_sell (List[Order]): Buy orders whose hold period has elapsed.
+
+    Note:
+        ``archived_at`` on each entry is timezone-aware UTC (``datetime`` with ``timezone.utc``).
     """
 
     TERMINAL_STATUSES = {
@@ -65,6 +68,12 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
         self._article_id_index = snapshot['_article_id_index']
         self._buy_order_id_index = snapshot['_buy_order_id_index']
         self.ready_to_sell = snapshot['ready_to_sell']
+        for entry in self.archived_entries:
+            at = entry.get("archived_at")
+            if isinstance(at, datetime) and at.tzinfo is None:
+                entry["archived_at"] = naive_local_to_utc(at)
+            elif isinstance(at, datetime):
+                entry["archived_at"] = at.astimezone(timezone.utc)
 
     def archive_news_entry(
         self,
@@ -111,7 +120,7 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
             'sentiment_response': sentiment_response,
             'buy_order': buy_order,
             'sell_order': None,
-            'archived_at': datetime.now(),
+            'archived_at': datetime.now(timezone.utc),
             'resulted_in_purchase': buy_order is not None,
             'buy_order_terminal': buy_order is None,  # True if no buy order (nothing to track)
             'sell_order_terminal': True,  # No sell order yet, nothing to track
@@ -193,14 +202,16 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
                     entry['buy_order'] = updated_buy_order
 
                     if updated_buy_order.status == OrderStatus.FILLED:
-                        sell_time = updated_buy_order.filled_at + MARKET_HOLD_TIME
-                        if datetime.now(timezone.utc) >= sell_time:
-                            self.ready_to_sell.append(updated_buy_order)
-                            entry['buy_order_terminal'] = True
-                            self._logger.log_info(
-                                f"Buy order for {updated_buy_order.symbol} (ID: {updated_buy_order.id}) "
-                                f"filled and hold period elapsed. Added to ready_to_sell."
-                            )
+                        filled_utc = ensure_utc(updated_buy_order.filled_at)
+                        if filled_utc is not None:
+                            sell_time = filled_utc + MARKET_HOLD_TIME
+                            if datetime.now(timezone.utc) >= sell_time:
+                                self.ready_to_sell.append(updated_buy_order)
+                                entry['buy_order_terminal'] = True
+                                self._logger.log_info(
+                                    f"Buy order for {updated_buy_order.symbol} (ID: {updated_buy_order.id}) "
+                                    f"filled and hold period elapsed. Added to ready_to_sell."
+                                )
                         # else: hold period not yet elapsed, keep buy_order_terminal as False
                     elif updated_buy_order.status in (
                         OrderStatus.CANCELED, OrderStatus.EXPIRED, OrderStatus.REJECTED

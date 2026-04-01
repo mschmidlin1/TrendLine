@@ -6,7 +6,8 @@ import streamlit as st
 from src.front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
 from src.trade_lifecycle_manager import TradeLifecycleManager
 from src.ticker_service import TickerService
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from src.configs import DISPLAY_TIMEZONE_NAME
+from src.base.datetime_utils import convert_series_to_display_tz
 
 def _compute_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -44,31 +45,33 @@ def render_trades_table() -> None:
                 return
 
             df = _compute_derived_metrics(df)
+            tz = DISPLAY_TIMEZONE_NAME
+            for col in ("archived_at", "buy_order_filled_at", "sell_order_filled_at"):
+                if col in df.columns:
+                    df[col] = convert_series_to_display_tz(df[col], tz)
             df = df.sort_values("archived_at", ascending=False, na_position="last")
 
-            # Streamlit renders datetimes reasonably; for long titles, keep the UI readable.
-            # if "title" in df_display.columns:
-            #     df_display = df_display.copy()
-            #     df_display["title"] = df_display["title"].astype(str).str.slice(0, 120)
-            
             ticker_service = TickerService()
-            
+
             df["Company"] = df["ticker"].apply(ticker_service.lookup_stock_name)
             df = df.rename(columns={
                 "pnl": "Total Gain",
                 "pnl_pct": "Total Gain %",
-                "archived_at": "Date",
+                "archived_at": "Date (ET)",
                 "title": "Headline",
                 "ticker": "Ticker",
                 "sentiment": "Sentiment",
-                "buy_order_filled_at": "Purchased Date",
-                "sell_order_filled_at": "Sold Date",
+                "buy_order_filled_at": "Purchased Date (ET)",
+                "sell_order_filled_at": "Sold Date (ET)",
             })
 
             st.session_state["news_table"] = df
     
     
-    col_order = ["Date", "Headline", "Ticker", "Company", "Sentiment", "Purchased Date", "Sold Date", "Total Gain", "Total Gain %"]
+    col_order = [
+        "Date (ET)", "Headline", "Ticker", "Company", "Sentiment",
+        "Purchased Date (ET)", "Sold Date (ET)", "Total Gain", "Total Gain %",
+    ]
     #Source_name, Shares, buy order status, sell order status
     st.dataframe(st.session_state["news_table"], use_container_width=True, hide_index=True, column_order=col_order)
     #AgGrid(data=st.session_state["news_table"])
