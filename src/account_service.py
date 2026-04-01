@@ -1,15 +1,17 @@
+from alpaca.data import Trade
 from src.base.singleton import SingletonMeta
 from alpaca.trading.requests import GetPortfolioHistoryRequest
 from src.base.alpaca_client import AlpacaClient
 from alpaca.trading.client import TradingClient
 from datetime import datetime
-from alpaca.trading.models import Order, Position
+from alpaca.trading.models import Order, Position, TradeAccount
 from typing import List
 
-class HistoricalDataService(metaclass=SingletonMeta):
+class AccountService(metaclass=SingletonMeta):
     def __init__(self):
         self.alpaca_client = AlpacaClient()
         self.trading_client: TradingClient = self.alpaca_client.trading_client
+        self.update_account()
 
     def get_equity_history(self, **kwargs):
         """
@@ -48,7 +50,7 @@ class HistoricalDataService(metaclass=SingletonMeta):
 
     def get_history_1m(self):
         """Last 30 days at 1-hour resolution."""
-        return self.get_equity_history(period="1M", timeframe="1H", intraday_reporting="continuous")
+        return self.get_equity_history(period="28D", timeframe="1H", intraday_reporting="continuous")
 
     def get_history_3m(self):
         """Last 90 days at 1-day resolution."""
@@ -67,3 +69,22 @@ class HistoricalDataService(metaclass=SingletonMeta):
     def get_history_all(self):
         """Entire account history at 1-day resolution."""
         return self.get_equity_history(period="all", timeframe="1D")
+
+    def update_account(self):
+        self.account: TradeAccount = self.trading_client.get_account()
+
+    def get_available_cash(self) -> float:
+        """
+        Get the cash available from the alpaca account.
+        """
+        self.update_account()
+        return float(self.account.cash)
+
+    def get_buying_power(self) -> float:
+        """
+        Retrieve and the buying power from alpaca account.
+        """
+        self.update_account()
+        return float(self.account.buying_power)
+    
+

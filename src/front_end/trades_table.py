@@ -5,7 +5,8 @@ import streamlit as st
 
 from src.front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
 from src.trade_lifecycle_manager import TradeLifecycleManager
-
+from src.ticker_service import TickerService
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 def _compute_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -43,12 +44,16 @@ def render_trades_table() -> None:
                 return
 
             df = _compute_derived_metrics(df)
+            df = df.sort_values("archived_at", ascending=False, na_position="last")
 
             # Streamlit renders datetimes reasonably; for long titles, keep the UI readable.
             # if "title" in df_display.columns:
             #     df_display = df_display.copy()
             #     df_display["title"] = df_display["title"].astype(str).str.slice(0, 120)
             
+            ticker_service = TickerService()
+            
+            df["Company"] = df["ticker"].apply(ticker_service.lookup_stock_name)
             df = df.rename(columns={
                 "pnl": "Total Gain",
                 "pnl_pct": "Total Gain %",
@@ -63,9 +68,10 @@ def render_trades_table() -> None:
             st.session_state["news_table"] = df
     
     
-    col_order = ["Date", "Headline", "Ticker", "Sentiment", "Purchased Date", "Sold Date", "Total Gain", "Total Gain %"]
+    col_order = ["Date", "Headline", "Ticker", "Company", "Sentiment", "Purchased Date", "Sold Date", "Total Gain", "Total Gain %"]
     #Source_name, Shares, buy order status, sell order status
     st.dataframe(st.session_state["news_table"], use_container_width=True, hide_index=True, column_order=col_order)
+    #AgGrid(data=st.session_state["news_table"])
 
     df = st.session_state["news_table"]
     total_usd = df["Total Gain"].sum()

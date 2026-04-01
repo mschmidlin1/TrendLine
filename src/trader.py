@@ -20,6 +20,7 @@ from src.base.singleton import SingletonMeta
 from src.base.alpaca_client import AlpacaClient
 from src.ticker_service import TickerService
 from src.converters import orders_to_dataframe
+from src.account_service import AccountService
 
 class Trader():
     """
@@ -54,26 +55,9 @@ class Trader():
         self.trading_client = self.alpaca_client.trading_client
         self._logger = LoggingService()
         self.ticker_service = TickerService()
-
-    def get_account(self) -> None:
-        """
-        Retrieve and store the current account information.
-        
-        Updates the `self.account` attribute with the latest account data
-        from the Alpaca trading client.
-        """
-        self.account = self.trading_client.get_account()
+        self.account_service = AccountService()
     
-    def get_buying_power(self) -> None:
-        """
-        Retrieve and store the current buying power.
-        
-        Updates the `self.buying_power` attribute with the available buying
-        power from the account. Calls `get_account()` to ensure account
-        information is current.
-        """
-        self.get_account()
-        self.buying_power = float(self.account.buying_power)
+
     
     def get_ask_price(self, symbol: str) -> float:
         """
@@ -101,19 +85,6 @@ class Trader():
         quote = self.get_quote(symbol)
         return quote.bid_price
     
-    def get_all_positions(self) -> List[Position]:
-        """
-        Gets all positions (crypto and stock) and stores them in a
-        `pd.DataFrame` which can be accessed at `self.positions_df`.
-        
-        Retrieves all open positions from the trading client and converts
-        them into a pandas DataFrame with numeric type conversion applied
-        where appropriate.
-        """
-        self.get_account()
-        all_positions: List[Position] = self.trading_client.get_all_positions()
-        return all_positions
-
     def get_orders(self, filter_status: QueryOrderStatus = QueryOrderStatus.ALL) -> List[Order]:
         """
         Retrieve orders filtered by status and return as a pandas DataFrame.
@@ -215,9 +186,9 @@ class Trader():
         except KeyError as e:
             self._logger.log_warning(f"Could not get quote for Symbol {symbol}. Abandoning stock buy.")
             return None
-        self.get_buying_power()
-        if price>self.buying_power:
-            self._logger.log_warning(f"Not enough funds to buy {price} of '{symbol}'. Buying power is {self.buying_power}")
+        buying_power = self.account_service.get_buying_power()
+        if price>buying_power:
+            self._logger.log_warning(f"Not enough funds to buy {price} of '{symbol}'. Buying power is {buying_power}")
             return None
         elif quantity is None:
             self._logger.log_info(f"Buying {price} dollars of {symbol}.")
@@ -240,7 +211,7 @@ class Trader():
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected buy for '{symbol}'. Skipping. Error: {e}")
             return None
-        self.get_buying_power()
+
         return market_order
 
     def sell_all(self, cancel_orders: bool = True) -> None:
@@ -302,7 +273,7 @@ class Trader():
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected sell for '{symbol}'. Skipping. Error: {e}")
             return None
-        self.get_buying_power()
+
         return market_order
 
     def cancel_all_orders(self) -> List:

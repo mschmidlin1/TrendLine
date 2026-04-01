@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Dict, Tuple, List
-from src.account_service import HistoricalDataService
+from src.account_service import AccountService
 from alpaca.trading.models import PortfolioHistory
 import pandas as pd
 import plotly.graph_objects as go
@@ -24,7 +24,7 @@ def _get_data():
     if "equity_data_cache" not in st.session_state:
         with st.spinner("Getting equity data...", show_time=True):
             equity_data: Dict[str, Any] = dict[str, Any]()
-            service = HistoricalDataService()
+            service = AccountService()
             for label in labels:
                 if label == "1D":
                     equity_data["1D"] = portfolio_history_to_data(service.get_history_1d())
@@ -56,8 +56,15 @@ def render_time_preset_buttons() -> str:
 
 
 def render_equity_plot() -> None:
-    st.subheader("Total Equity Over Time")
-    
+    if "available_cash_display" not in st.session_state:
+        service = AccountService()
+        st.session_state["available_cash_display"] = f"${service.get_available_cash():,.2f}"
+    header_col, cash_col = st.columns(2)
+    with header_col:
+        st.subheader("Total Equity Over Time")
+    with cash_col:
+        st.metric("Available Cash: ", st.session_state["available_cash_display"])
+
     _get_data()
 
     choice = render_time_preset_buttons()

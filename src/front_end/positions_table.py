@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from alpaca.trading.models import Position
-from src.account_service import HistoricalDataService
+from src.account_service import AccountService
 from src.converters import positions_to_dataframe
 from src.ticker_service import TickerService
 
@@ -70,7 +70,7 @@ def render_positions_table() -> None:
     st.subheader("Current positions")
     if "positions_df" not in st.session_state:
         with st.spinner("Getting positions data...", show_time=True):
-            service = HistoricalDataService()
+            service = AccountService()
             positions: List[Position] = service.get_all_positions()
             df = positions_to_dataframe(positions)
 

@@ -104,12 +104,16 @@ class SentimentService(metaclass=SingletonMeta):
                 ticker_found = False
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False
+                sentiment = "NONE"
         except:
             self._logger.log_error(f"SentimentService errored when trying to parse this response: '{response}'")
             format_match = False
             ticker_found = False
             sentiment = ""
             ticker = ""
+        #unify responses for presentation
+        if not ticker_found:
+            ticker = "NONE"
         return SentimentResponse(sentiment, ticker, format_match, ticker_found, response)
 
     def _parse_response(self, response) -> Tuple[str, str]:

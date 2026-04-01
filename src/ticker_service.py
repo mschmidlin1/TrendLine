@@ -49,7 +49,10 @@ class TickerService(metaclass=SingletonMeta):
     def lookup_stock_name(self, symbol: str) -> str:
         if self.asset_dict is None:
             self.get_active_symbols("us_equity")
-        return self.asset_dict[symbol]
+        try:
+            return self.asset_dict[symbol]
+        except KeyError as e:
+            return None
     
     def is_stock_symbol(self, symbol: str):
         available_symbols = self.get_available_symbols("us_equity")

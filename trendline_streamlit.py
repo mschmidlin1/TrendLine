@@ -5,6 +5,7 @@ from src.front_end.equity_plot import render_equity_plot
 from src.front_end.positions_table import render_positions_table
 from src.front_end.trades_table import render_trades_table
 from src.front_end.log_viewer import render_log_viewer
+from src.front_end.about_tab import render_about_doc
 import base64
 from pathlib import Path
 
@@ -72,74 +73,23 @@ def main() -> None:
     """,
     unsafe_allow_html=True,
 )
-    # left, right = st.columns([1, 1])
-    # with left:
-    #     #st.image("resources/logo_big.png", width=600)
+   
+    # st.divider()
+    main_tab, about_tab = st.tabs(["Main", "About"])
+    with main_tab:
+        render_equity_plot()
+        st.divider()
+        render_positions_table()
+        st.divider()
+        render_trades_table()
+        st.divider()
+        render_log_viewer()
+    
+    with about_tab:
+        render_about_doc()
+    
 
-    #     st.markdown(
-    #         f"""
-    #         <div style="text-align: left;">
-    #         <div style="
-    #             width: 240px;
-    #             height: 240px;
-    #             border-radius: 50%;
-    #             overflow: hidden;
-    #             display: inline-block;
-    #         ">
-    #             <img
-    #             src="data:{mime};base64,{b64}"
-    #             alt="Logo"
-    #             style="
-    #                 width: 100%;
-    #                 height: 100%;
-    #                 object-fit: cover;
-    #                 object-position: center center;
-    #                 transform: scale(1.35);
-    #                 transform-origin: center center;
-    #             "
-    #             />
-    #         </div>
-    #         </div>
-    #         """,
-    #         unsafe_allow_html=True,
-    #     )
-    # with right:
-    #     st.title("TrendLine Dashboard")
-    st.divider()
-    render_equity_plot()
-    st.divider()
-    render_positions_table()
-    st.divider()
-    render_trades_table()
-    st.divider()
-    render_log_viewer()
-    # tab_equity, tab_trades, tab_logs = st.tabs(["Equity", "Archived Trades", "Logs"])
-
-    # with tab_equity:
-    #     try:
-    #         render_equity_plot()
-    #     except Exception as e:
-    #         st.error("Failed to render equity history.")
-    #         st.exception(e)
-    #     try:
-    #         render_positions_table()
-    #     except Exception as e:
-    #         st.error("Failed to render current positions.")
-    #         st.exception(e)
-
-    # with tab_trades:
-    #     try:
-    #         render_trades_table()
-    #     except Exception as e:
-    #         st.error("Failed to render archived trades.")
-    #         st.exception(e)
-
-    # with tab_logs:
-    #     try:
-    #         render_log_viewer()
-    #     except Exception as e:
-    #         st.error("Failed to render logs.")
-    #         st.exception(e)
+    
 
 
 if __name__ == "__main__":
