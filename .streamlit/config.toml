@@ -1,0 +1,31 @@
+# TrendLine Streamlit theme — light/dark palettes (Settings → Theme).
+# See https://docs.streamlit.io/develop/api-reference/configuration/config.toml
+
+[theme]
+base = "light"
+
+[theme.light]
+primaryColor = "#2563eb"
+backgroundColor = "#dbdbdb"
+secondaryBackgroundColor = "#b5b5b5"
+textColor = "#1f2937"
+
+[theme.light.sidebar]
+backgroundColor = "#f8fafc"
+secondaryBackgroundColor = "#f1f5f9"
+textColor = "#1f2937"
+
+[theme.dark]
+primaryColor = "#317bd6"
+backgroundColor = "#1c1b1b"
+secondaryBackgroundColor = "#1e293b"
+textColor = "#f1f5f9"
+
+[theme.dark.sidebar]
+backgroundColor = "#020617"
+secondaryBackgroundColor = "#0f172a"
+textColor = "#f1f5f9"
+
+[trendline.aggrid]
+textColorDark = "#999999"
+textColorLight = "#1f2937"
