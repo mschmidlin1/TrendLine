@@ -6,22 +6,29 @@ from src.front_end.positions_table import render_positions_table
 from src.front_end.trades_table import render_trades_table
 from src.front_end.log_viewer import render_log_viewer
 from src.front_end.about_tab import render_about_doc
+from src.front_end.power_display import render_power_display
 import base64
 from pathlib import Path
 
 def main() -> None:
     st.set_page_config(page_title="TrendLine Dashboard", layout="wide")
+    st.set_page_config(
+    page_title="TrendLine",
+    page_icon="📈",
+    layout="wide",
+)
     st.markdown(
     """
     <style>
         .block-container {
-            padding-top: 2.7rem;
+            padding-top: 2.8rem;
             padding-bottom: 1rem;
         }
     </style>
     """,
     unsafe_allow_html=True,
 )
+    #region Header
     path = Path("resources/logo_small.png")
     b64 = base64.b64encode(path.read_bytes()).decode()
     mime = "image/png"  # use "image/jpeg" for .jpg
@@ -73,7 +80,8 @@ def main() -> None:
     """,
     unsafe_allow_html=True,
 )
-   
+    #endregion
+    render_power_display()
     # st.divider()
     main_tab, about_tab = st.tabs(["Main", "About"])
     with main_tab:
@@ -83,6 +91,7 @@ def main() -> None:
         st.divider()
         render_trades_table()
         st.divider()
+        #with st.expander("Log Viewer"):
         render_log_viewer()
     
     with about_tab:

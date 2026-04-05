@@ -26,7 +26,7 @@ def render_about_doc() -> None:
 TrendLine works based on one main assumption, that news data is highly correlated to market sentiment. TrendLine lets news sentiment influence it's stock buying decisions, very similar to how a human might be influenced by the news. 
 
 The basic workflow of the algorithm is this:
-Read news articles -> analyze sentiment -> buy stocks.
+Read news articles -> analyze sentiment -> trade stocks.
 
 
 ### Algorithm Overview
