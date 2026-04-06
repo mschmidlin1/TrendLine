@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
@@ -110,6 +111,36 @@ def apply_news_table_filters() -> None:
     st.session_state["news_table_filtered"] = df
 
 
+def _sentiment_outcome_bar_figure(df: pd.DataFrame) -> go.Figure | None:
+    if df.empty or "Total Gain" not in df.columns:
+        return None
+    gain = pd.to_numeric(df["Total Gain"], errors="coerce")
+    correct = int((gain > 0).sum())
+    incorrect = int((gain < 0).sum())
+    if correct == 0 and incorrect == 0:
+        return None
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=["Correct sentiment", "Incorrect sentiment"],
+                y=[correct, incorrect],
+                marker_color=["#2ca02c", "#d62728"],
+                text=[correct, incorrect],
+                textposition="auto",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text="Count of Positive Vs Negative Gain Trades", x=0.5, xanchor="center"),
+        height=360,
+        margin=dict(l=10, r=10, t=60, b=10),
+        yaxis_title="Count",
+        template="plotly_white",
+        showlegend=False,
+    )
+    return fig
+
+
 def render_trades_table() -> None:
     st.subheader("News Trades")
     if "news_table" not in st.session_state:
@@ -206,3 +237,12 @@ def render_trades_table() -> None:
     with col_pct:
         pct_display = f"{total_pct:.2%}" if total_pct is not None and pd.notna(total_pct) else "—"
         st.metric("Total gain %", pct_display)
+
+    st.subheader("Charts")
+    fig = _sentiment_outcome_bar_figure(df)
+    if df.empty:
+        st.info("No rows match the current filters.")
+    elif fig is None:
+        st.info("No trades with positive or negative PnL in the current filter.")
+    else:
+        st.plotly_chart(fig, use_container_width=True)

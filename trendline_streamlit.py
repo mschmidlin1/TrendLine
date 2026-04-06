@@ -83,7 +83,7 @@ def main() -> None:
     #endregion
     render_power_display()
     # st.divider()
-    main_tab, about_tab = st.tabs(["Main", "About"])
+    main_tab, about_tab, log_tab = st.tabs(["Main", "About", "Logs"])
     with main_tab:
         render_equity_plot()
         st.divider()
@@ -91,7 +91,7 @@ def main() -> None:
         st.divider()
         render_trades_table()
         st.divider()
-        #with st.expander("Log Viewer"):
+    with log_tab:
         render_log_viewer()
     
     with about_tab:
