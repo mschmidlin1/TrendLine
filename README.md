@@ -18,6 +18,22 @@ I need a way to tell when a purchase order has actually been fullfilled. Basical
 
 TrendLine is an automated trading system that monitors financial news in real-time and executes stock trades based on sentiment analysis. The system mimics the decision-making process of a human trader who buys stocks on positive news and sells on negative news, but operates continuously and systematically during market hours.
 
+## Ollama (local LLM) configuration
+
+TrendLine uses the local Ollama server (default `http://localhost:11434`) for headline sentiment/ticker extraction.
+
+### Environment variables
+
+- **`OLLAMA_MODEL`**: model name to use. Default: `llama3.1`
+- **`OLLAMA_MAX_ATTEMPTS`**: total tries per headline before falling back. Default: `3`
+- **`OLLAMA_RETRY_BACKOFF_SECONDS`**: exponential backoff base in seconds between failed tries. Default: `0.75`
+- **`OLLAMA_TIMEOUT_SECONDS`**: optional client timeout seconds (empty/0 disables). Default: disabled
+- **`OLLAMA_WARMUP_ON_STARTUP`**: `1`/`0` to enable a best-effort warmup call at startup. Default: `1`
+
+### Failure behavior (important)
+
+If Ollama errors during sentiment prediction, TrendLine will retry (warnings on the first 2 failures). If it still fails on the 3rd attempt it logs an error and returns a **non-actionable** `SentimentResponse` (no sentiment, `format_match=False`), so it will not place trades from that headline.
+
 ### Key Capabilities
 
 - **Automated News Monitoring**: Continuously scrapes financial news from reliable, pre-configured sources
