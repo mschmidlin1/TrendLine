@@ -8,6 +8,7 @@ from src.trader import StockTrader
 from src.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
 from src.trade_lifecycle_manager import TradeLifecycleManager
 from src.persistent_data_service import PersistentDataService
+from src.configs import OLLAMA_WARMUP_ON_STARTUP
 
 import atexit
 import signal
@@ -46,6 +47,10 @@ if hasattr(signal, "SIGTERM"):
 
 ready_to_sell_orders: List[Order] = []
 
+if OLLAMA_WARMUP_ON_STARTUP:
+    logger.log_info("Warming up Ollama sentiment service (non-fatal).")
+    sentiment_service.warmup()
+
 while True:
     """
     Buying Logic
@@ -67,7 +72,12 @@ while True:
             if entry.get('title')=="" or entry.get('title') is None:
                 logger.log_warning(f"No headline found for article. {name} --- {entry.get('link', '')}")
                 continue
-            sentiment_response: SentimentResponse = sentiment_service.analyze_sentiment(entry.get('title'))
+            try:
+                sentiment_response: SentimentResponse = sentiment_service.analyze_sentiment(entry.get('title'))
+            except Exception as e:
+                # SentimentService is intended to never raise, but guard the main loop regardless.
+                logger.log_error(f"SentimentService crashed: {type(e).__name__}: {e}")
+                sentiment_response = SentimentResponse("", "NONE", format_match=False, ticker_found=False, raw_response="")
 
             # Initialize buy_order as None
             buy_order = None

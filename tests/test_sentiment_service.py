@@ -171,6 +171,8 @@ Note: The article does not have an explicitly negative tone towards any company 
 
     def test_analyze_sentiment_1(self):
             """Test that batch analysis handles individual errors gracefully."""
+            if os.getenv("RUN_OLLAMA_INTEGRATION_TESTS", "0").strip() in ("0", "false", "False", ""):
+                self.skipTest("Requires a running local Ollama server. Set RUN_OLLAMA_INTEGRATION_TESTS=1 to enable.")
             service = SentimentService()
             
             test_response = service.analyze_sentiment("NVIDIA shares soared 5% today after announcing a new Blackwell chip breakthrough.")

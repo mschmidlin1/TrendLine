@@ -51,3 +51,15 @@ RSS_FEED_URLS = {
     "FinancialTimes": "https://www.ft.com/global-economy?format=rss",
     "TheEconomist": "https://www.economist.com/business/rss.xml"
     }
+
+# Ollama / SentimentService settings (env-overridable)
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+# Total attempts per sentiment prediction (including the first try).
+OLLAMA_MAX_ATTEMPTS = int(os.getenv("OLLAMA_MAX_ATTEMPTS", "3"))
+# Exponential backoff base in seconds. Sleep is applied after failed attempts 1..(max-1).
+OLLAMA_RETRY_BACKOFF_SECONDS = float(os.getenv("OLLAMA_RETRY_BACKOFF_SECONDS", "0.75"))
+# Optional hard timeout (seconds) for the Ollama client request. Empty/0 disables.
+_ollama_timeout_raw = os.getenv("OLLAMA_TIMEOUT_SECONDS", "").strip()
+OLLAMA_TIMEOUT_SECONDS = float(_ollama_timeout_raw) if _ollama_timeout_raw not in ("", "0") else None
+# If true, `trendline.py` will attempt a non-fatal warmup on startup.
+OLLAMA_WARMUP_ON_STARTUP = os.getenv("OLLAMA_WARMUP_ON_STARTUP", "1").strip() not in ("0", "false", "False")

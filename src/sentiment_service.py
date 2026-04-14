@@ -1,12 +1,20 @@
 from src.base.singleton import SingletonMeta
 from src.base.sentiment_response import SentimentResponse
-import ollama
 from src.base.timer import Timer
-import ollama
 import re
-from typing import Tuple, List
+from typing import Tuple, List, Optional, TYPE_CHECKING
+import time
 from src.base.tl_logger import LoggingService
 from src.ticker_service import TickerService
+from src.configs import (
+    OLLAMA_MODEL,
+    OLLAMA_MAX_ATTEMPTS,
+    OLLAMA_RETRY_BACKOFF_SECONDS,
+    OLLAMA_TIMEOUT_SECONDS,
+)
+
+if TYPE_CHECKING:
+    import ollama  # pragma: no cover
 
 class SentimentService(metaclass=SingletonMeta):
     """
@@ -59,21 +67,77 @@ class SentimentService(metaclass=SingletonMeta):
                              format validation flags, and the raw LLM response.
         """
         
-        timer = Timer()
-        timer.start()
-        full_response: ollama.ChatResponse = ollama.chat(
-            model='llama3.1',
-            messages=[
-                {'role': 'system', 'content': self.instructions}, # The Rules
-                {'role': 'user', 'content': text},        # The Data
-            ]
-        )
-        timer.stop()
-        ellapsed_time = timer.elapsed_str()
-        self._logger.log_info(f"Sentiment predicted by ollama. Took {ellapsed_time}")
+        attempts = max(1, int(OLLAMA_MAX_ATTEMPTS))
+        last_error: Optional[Exception] = None
 
-        response = full_response['message']['content']
-        return self._parse_sentiment(response)
+        for attempt in range(1, attempts + 1):
+            timer = Timer()
+            timer.start()
+            try:
+                import ollama
+
+                kwargs = {}
+                if OLLAMA_TIMEOUT_SECONDS is not None:
+                    kwargs["timeout"] = OLLAMA_TIMEOUT_SECONDS
+
+                full_response = ollama.chat(
+                    model=OLLAMA_MODEL,
+                    messages=[
+                        {"role": "system", "content": self.instructions},  # The Rules
+                        {"role": "user", "content": text},  # The Data
+                    ],
+                    **kwargs,
+                )
+                timer.stop()
+                ellapsed_time = timer.elapsed_str()
+                self._logger.log_info(f"Sentiment predicted by ollama. Took {ellapsed_time}")
+
+                response = full_response["message"]["content"]
+                return self._parse_sentiment(response)
+            except Exception as e:
+                timer.stop()
+                last_error = e
+                if attempt < attempts:
+                    self._logger.log_warning(
+                        f"Ollama sentiment attempt {attempt}/{attempts} failed: {type(e).__name__}: {e}. Retrying."
+                    )
+                    backoff = float(OLLAMA_RETRY_BACKOFF_SECONDS) * (2 ** (attempt - 1))
+                    time.sleep(max(0.0, backoff))
+                    continue
+
+                # Final attempt failed: log error and return safe non-actionable response.
+                self._logger.log_error(
+                    f"Ollama sentiment attempt {attempt}/{attempts} failed: {type(e).__name__}: {e}. Returning non-actionable SentimentResponse."
+                )
+                raw = f"OllamaError: {type(last_error).__name__}: {last_error}" if last_error else "OllamaError"
+                # Ensure caller cannot act on this response
+                return SentimentResponse("", "NONE", format_match=False, ticker_found=False, raw_response=raw)
+
+        # Should be unreachable, but keep a safe default.
+        return SentimentResponse("", "NONE", format_match=False, ticker_found=False, raw_response="OllamaError")
+
+    def warmup(self) -> bool:
+        """
+        Best-effort warmup. Never raises; returns True on success.
+        """
+        try:
+            import ollama
+
+            kwargs = {}
+            if OLLAMA_TIMEOUT_SECONDS is not None:
+                kwargs["timeout"] = OLLAMA_TIMEOUT_SECONDS
+            ollama.chat(
+                model=OLLAMA_MODEL,
+                messages=[
+                    {"role": "system", "content": "Reply with: OK"},
+                    {"role": "user", "content": "ping"},
+                ],
+                **kwargs,
+            )
+            return True
+        except Exception as e:
+            self._logger.log_warning(f"Ollama warmup failed: {type(e).__name__}: {e}")
+            return False
 
     def _parse_sentiment(self, response: str) -> SentimentResponse:
         """
