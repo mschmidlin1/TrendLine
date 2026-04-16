@@ -14,6 +14,7 @@ from alpaca.data.models.quotes import Quote
 import pandas as pd
 from datetime import datetime
 from typing import Optional, Dict, List
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
 from src.configs import ALPACA_CHOSEN_SECRET_KEY
 from src.base.tl_logger import LoggingService
@@ -187,7 +188,18 @@ class Trader():
         except KeyError as e:
             self._logger.log_warning(f"Could not get quote for Symbol {symbol}. Abandoning stock buy.")
             return None
-        buying_power = self.account_service.get_buying_power()
+        try:
+            buying_power = self.account_service.get_buying_power()
+        except RequestsConnectionError as e:
+            self._logger.log_warning(
+                f"Connection error while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}"
+            )
+            return None
+        except RequestsTimeout as e:
+            self._logger.log_warning(
+                f"Timeout while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}"
+            )
+            return None
         if price>buying_power:
             self._logger.log_warning(f"Not enough funds to buy {price} of '{symbol}'. Buying power is {buying_power}")
             return None
@@ -211,6 +223,12 @@ class Trader():
             market_order: Order = self.trading_client.submit_order(market_order_data)
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected buy for '{symbol}'. Skipping. Error: {e}")
+            return None
+        except RequestsConnectionError as e:
+            self._logger.log_warning(f"Connection error placing buy for '{symbol}'. Skipping. Error: {e}")
+            return None
+        except RequestsTimeout as e:
+            self._logger.log_warning(f"Timeout placing buy for '{symbol}'. Skipping. Error: {e}")
             return None
 
         return market_order
@@ -273,6 +291,12 @@ class Trader():
             market_order: Order = self.trading_client.submit_order(market_order_data)
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected sell for '{symbol}'. Skipping. Error: {e}")
+            return None
+        except RequestsConnectionError as e:
+            self._logger.log_warning(f"Connection error placing sell for '{symbol}'. Skipping. Error: {e}")
+            return None
+        except RequestsTimeout as e:
+            self._logger.log_warning(f"Timeout placing sell for '{symbol}'. Skipping. Error: {e}")
             return None
 
         return market_order
