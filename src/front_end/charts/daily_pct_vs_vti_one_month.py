@@ -16,14 +16,12 @@ from src.configs import DISPLAY_TIMEZONE_NAME
 from src.front_end.charts.net_trades_by_sell_day import colors_for_net_counts
 from src.trader import StockTrader
 
-DAILY_PCT_VTI_CHART_SESSION_KEY = "daily_pct_vs_vti_chart_prepared"
+DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY = "daily_pct_vs_vti_one_month_chart_prepared"
 
-# Opacity for VTI bars only (Trendline stays solid). Tune here if the chart needs adjustment.
 VTI_BAR_MARKER_ALPHA = 0.30
 
-# Legend-only marker colors (neutral; per-bar red/green mean up/down, not series identity).
-_LEGEND_GROUP_TRENDLINE = "daily_pct_trendline"
-_LEGEND_GROUP_VTI = "daily_pct_vti"
+_LEGEND_GROUP_TRENDLINE = "daily_pct_trendline_1m"
+_LEGEND_GROUP_VTI = "daily_pct_vti_1m"
 _LEGEND_MARKER_TRENDLINE = "#3949ab"
 _LEGEND_MARKER_VTI = "#78909c"
 
@@ -152,8 +150,8 @@ def _vti_pct_per_day(
 
 
 @dataclass(frozen=True)
-class DailyPctVsVtiPrepared:
-    """Payload for the daily % vs VTI grouped bar chart."""
+class DailyPctVsVtiOneMonthPrepared:
+    """Payload for the rolling ~1 month daily % vs VTI grouped bar chart."""
 
     x_labels: list[str]
     trend_pct: list[float]
@@ -163,10 +161,13 @@ class DailyPctVsVtiPrepared:
     vti_fetch_failed: bool
 
 
-def _compute_daily_pct_vs_vti(full_df: pd.DataFrame) -> DailyPctVsVtiPrepared | None:
+def _compute_daily_pct_vs_vti_one_month(full_df: pd.DataFrame) -> DailyPctVsVtiOneMonthPrepared | None:
     et = ZoneInfo(DISPLAY_TIMEZONE_NAME)
     end_day = pd.Timestamp.now(tz=et).normalize()
-    business_days = pd.bdate_range(end=end_day, periods=7, freq="B", tz=et)
+    start_day = (end_day - pd.DateOffset(months=1)).normalize()
+    business_days = pd.bdate_range(start=start_day, end=end_day, freq="B", tz=et)
+    if len(business_days) == 0:
+        return None
 
     trend_pct = _trendline_blended_pct_per_day(full_df, business_days, et)
     if trend_pct is None:
@@ -178,7 +179,7 @@ def _compute_daily_pct_vs_vti(full_df: pd.DataFrame) -> DailyPctVsVtiPrepared | 
     trend_colors = colors_for_pct(trend_pct)
     vti_colors = colors_for_pct([v if v is not None else 0.0 for v in vti_pct])
 
-    return DailyPctVsVtiPrepared(
+    return DailyPctVsVtiOneMonthPrepared(
         x_labels=x_labels,
         trend_pct=trend_pct,
         vti_pct=vti_pct,
@@ -188,13 +189,13 @@ def _compute_daily_pct_vs_vti(full_df: pd.DataFrame) -> DailyPctVsVtiPrepared | 
     )
 
 
-def prepare_daily_pct_vs_vti(full_df: pd.DataFrame) -> DailyPctVsVtiPrepared | None:
-    if DAILY_PCT_VTI_CHART_SESSION_KEY not in st.session_state:
-        st.session_state[DAILY_PCT_VTI_CHART_SESSION_KEY] = _compute_daily_pct_vs_vti(full_df)
-    return st.session_state[DAILY_PCT_VTI_CHART_SESSION_KEY]
+def prepare_daily_pct_vs_vti_one_month(full_df: pd.DataFrame) -> DailyPctVsVtiOneMonthPrepared | None:
+    if DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY not in st.session_state:
+        st.session_state[DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY] = _compute_daily_pct_vs_vti_one_month(full_df)
+    return st.session_state[DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY]
 
 
-def _daily_pct_vs_vti_figure(prepared: DailyPctVsVtiPrepared) -> go.Figure:
+def _daily_pct_vs_vti_one_month_figure(prepared: DailyPctVsVtiOneMonthPrepared) -> go.Figure:
     trend_text = [f"{v:.2%}" for v in prepared.trend_pct]
     vti_text = [f"{v:.2%}" if v is not None else "" for v in prepared.vti_pct]
 
@@ -248,7 +249,7 @@ def _daily_pct_vs_vti_figure(prepared: DailyPctVsVtiPrepared) -> go.Figure:
     )
     fig.update_layout(
         title=dict(
-            text="Daily % gain by sell day vs VTI (last 7 business days, all trades)",
+            text="Daily % gain by sell day vs VTI (last ~1 month, business days, all trades)",
             x=0.5,
             xanchor="center",
         ),
@@ -264,12 +265,12 @@ def _daily_pct_vs_vti_figure(prepared: DailyPctVsVtiPrepared) -> go.Figure:
     return fig
 
 
-def render_daily_pct_vs_vti_chart(full_df: pd.DataFrame) -> None:
-    prepared = prepare_daily_pct_vs_vti(full_df)
+def render_daily_pct_vs_vti_one_month_chart(full_df: pd.DataFrame) -> None:
+    prepared = prepare_daily_pct_vs_vti_one_month(full_df)
     if prepared is None:
-        st.info("Daily % vs VTI chart is not available.")
+        st.info("Daily % vs VTI (1M) chart is not available.")
         return
     if prepared.vti_fetch_failed:
         st.warning("VTI benchmark data could not be loaded from Alpaca.")
-    fig = _daily_pct_vs_vti_figure(prepared)
+    fig = _daily_pct_vs_vti_one_month_figure(prepared)
     st.plotly_chart(fig, use_container_width=True)

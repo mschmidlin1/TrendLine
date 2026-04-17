@@ -12,9 +12,13 @@ from src.front_end.charts.weekly_net_trades import (
 from src.front_end.charts.daily_pct_vs_vti import (
     render_daily_pct_vs_vti_chart,
 )
+from src.front_end.charts.daily_pct_vs_vti_one_month import (
+    render_daily_pct_vs_vti_one_month_chart,
+)
 
 __all__ = [
     "render_daily_pct_vs_vti_chart",
+    "render_daily_pct_vs_vti_one_month_chart",
     "render_monthly_net_trades_chart",
     "render_sentiment_outcome_chart",
     "render_weekly_net_trades_chart",
