@@ -8,6 +8,7 @@ from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest, Cryp
 from alpaca.data.requests import CryptoBarsRequest
 from alpaca.trading.models import Order, Position
 from alpaca.data.timeframe import TimeFrame
+from alpaca.data.enums import DataFeed
 from alpaca.data.models.quotes import Quote
 
 import pandas as pd
@@ -367,7 +368,8 @@ class StockTrader(Trader, metaclass=SingletonMeta):
                         symbol_or_symbols=symbol,
                         timeframe=self.timeframe_lookup[time_resolution],
                         start=start,
-                        end=end
+                        end=end,
+                        feed=DataFeed.IEX,
                  )
 
         bars = client.get_stock_bars(request_params)
