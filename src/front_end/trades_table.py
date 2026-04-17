@@ -6,10 +6,14 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from alpaca.common.exceptions import APIError
 
+from src.front_end.charts import (
+    render_monthly_net_trades_chart,
+    render_sentiment_outcome_chart,
+    render_weekly_net_trades_chart,
+)
 from src.front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
 from src.trade_lifecycle_manager import TradeLifecycleManager
 from src.ticker_service import TickerService
@@ -23,17 +27,16 @@ _BENCHMARK_SYMBOLS: tuple[tuple[str, str], ...] = (
     ("SPY", "S&P 500 (SPY)"),
     ("DIA", "Dow Jones (DIA)"),
     ("QQQ", "Nasdaq-100 (QQQ)"),
+    ("VTI", "Vanguard Total Stock Market (VTI)"),
 )
 
 _KEY_SENTIMENT = "news_filter_sentiment"
 _KEY_TIME_PRESET = "news_filter_time_preset"
 _KEY_BENCHMARK_BY_PRESET = "news_benchmark_by_preset"
-_KEY_GAIN_MIN = "news_filter_gain_min"
-_KEY_GAIN_MAX = "news_filter_gain_max"
+_KEY_EXCLUDE_NONE_GAIN = "news_filter_exclude_none_gain"
 _KEY_HEADLINE = "news_filter_headline"
 _KEY_COMPANY = "news_filter_company"
 _KEY_APPLY = "news_filter_apply"
-_KEY_WEEKLY_NET_CHART = "weekly_net_trades_chart_figure"
 
 
 def _compute_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
@@ -78,9 +81,7 @@ def _news_time_preset_bounds(preset: str, et: ZoneInfo) -> tuple[pd.Timestamp, p
     return (start, now_et)
 
 
-def _benchmark_time_bounds(
-    preset: str, news_df: pd.DataFrame, et: ZoneInfo
-) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+def _benchmark_time_bounds(preset: str, news_df: pd.DataFrame, et: ZoneInfo) -> tuple[pd.Timestamp, pd.Timestamp] | None:
     """
     Calendar window used to fetch benchmark bars for this preset.
     ALL uses min/max Date (ET) on the full snapshot (see plan).
@@ -108,7 +109,7 @@ def _close_to_close_pct_from_bars(bars_df: pd.DataFrame) -> float | None:
         d = d.sort_values("timestamp", kind="mergesort")
     else:
         d = d.sort_index(kind="mergesort")
-    first = float(d["close"].iloc[0])
+    first = float(d["open"].iloc[0])
     last = float(d["close"].iloc[-1])
     if not math.isfinite(first) or not math.isfinite(last) or math.isclose(first, 0.0, abs_tol=1e-12):
         return None
@@ -153,8 +154,7 @@ def _prefetch_news_benchmarks(news_df: pd.DataFrame) -> None:
 def _initialize_news_filter_widget_defaults() -> None:
     st.session_state[_KEY_SENTIMENT] = []
 
-    st.session_state[_KEY_GAIN_MIN] = 0.0
-    st.session_state[_KEY_GAIN_MAX] = 0.0
+    st.session_state[_KEY_EXCLUDE_NONE_GAIN] = False
 
     st.session_state[_KEY_HEADLINE] = ""
     st.session_state[_KEY_COMPANY] = ""
@@ -181,17 +181,10 @@ def apply_news_table_filters() -> None:
             in_range = (ts_series >= start_bound) & (ts_series <= end_inclusive)
             df = df[in_range]
 
-    gain = pd.to_numeric(df["Total Gain"], errors="coerce")
-    gmin = float(st.session_state[_KEY_GAIN_MIN])
-    gmax = float(st.session_state[_KEY_GAIN_MAX])
-    if gmin > gmax:
-        gmin, gmax = gmax, gmin
-    gain_filter_off = math.isclose(gmin, 0.0, abs_tol=1e-9) and math.isclose(gmax, 0.0, abs_tol=1e-9)
-    if not gain_filter_off:
+    if st.session_state.get(_KEY_EXCLUDE_NONE_GAIN):
+        gain = pd.to_numeric(df["Total Gain"], errors="coerce")
         arr = gain.to_numpy(dtype=float, copy=True)
-        finite_mask = np.isfinite(arr)
-        gain_mask = finite_mask & (gain >= gmin) & (gain <= gmax)
-        df = df[gain_mask]
+        df = df[np.isfinite(arr)]
 
     headline_q = (st.session_state.get(_KEY_HEADLINE) or "").strip()
     if headline_q:
@@ -202,100 +195,6 @@ def apply_news_table_filters() -> None:
         df = df[df["Company"].astype(str).str.contains(company_q, case=False, na=False)]
 
     st.session_state["news_table_filtered"] = df
-
-
-def _sentiment_outcome_bar_figure(df: pd.DataFrame) -> go.Figure | None:
-    if df.empty or "Total Gain" not in df.columns:
-        return None
-    gain = pd.to_numeric(df["Total Gain"], errors="coerce")
-    correct = int((gain > 0).sum())
-    incorrect = int((gain < 0).sum())
-    if correct == 0 and incorrect == 0:
-        return None
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=["Correct sentiment", "Incorrect sentiment"],
-                y=[correct, incorrect],
-                marker_color=["#2ca02c", "#d62728"],
-                text=[correct, incorrect],
-                textposition="auto",
-            )
-        ]
-    )
-    fig.update_layout(
-        title=dict(text="Count of Positive Vs Negative Gain Trades", x=0.5, xanchor="center"),
-        height=360,
-        margin=dict(l=10, r=10, t=60, b=10),
-        yaxis_title="Count",
-        template="plotly_white",
-        showlegend=False,
-    )
-    return fig
-
-
-def _last_seven_business_days_net_bar_figure(full_df: pd.DataFrame) -> go.Figure | None:
-    if full_df.empty:
-        return None
-    if "Sold Date (ET)" not in full_df.columns or "Total Gain" not in full_df.columns:
-        return None
-
-    et = ZoneInfo(DISPLAY_TIMEZONE_NAME)
-    sell_raw = pd.to_datetime(full_df["Sold Date (ET)"], errors="coerce", utc=True)
-    valid_sell = sell_raw.notna()
-    sell_day = sell_raw.dt.tz_convert(et).dt.normalize()
-
-    gain = pd.to_numeric(full_df["Total Gain"], errors="coerce")
-    score = np.where(gain > 0, 1, np.where(gain < 0, -1, 0))
-    scored = pd.DataFrame({"sell_day": sell_day, "score": score})
-    scored = scored.loc[valid_sell]
-
-    end_day = pd.Timestamp.now(tz=et).normalize()
-    business_days = pd.bdate_range(end=end_day, periods=7, freq="B", tz=et)
-
-    green = "#2ca02c"
-    red = "#d62728"
-    gray = "#9e9e9e"
-    x_labels: list[str] = []
-    y_vals: list[int] = []
-    colors: list[str] = []
-
-    for bd in business_days:
-        day_net = int(scored.loc[scored["sell_day"] == bd, "score"].sum())
-        x_labels.append(bd.strftime("%a %m/%d"))
-        y_vals.append(day_net)
-        if day_net > 0:
-            colors.append(green)
-        elif day_net < 0:
-            colors.append(red)
-        else:
-            colors.append(gray)
-
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=x_labels,
-                y=y_vals,
-                marker_color=colors,
-                text=y_vals,
-                textposition="auto",
-            )
-        ]
-    )
-    fig.update_layout(
-        title=dict(
-            text="Net win/loss trades by sell day (last 7 business days, all trades)",
-            x=0.5,
-            xanchor="center",
-        ),
-        height=360,
-        margin=dict(l=10, r=10, t=60, b=10),
-        yaxis_title="Net (+1 / -1 per trade)",
-        template="plotly_white",
-        showlegend=False,
-    )
-    fig.update_yaxes(zeroline=True, zerolinewidth=1, zerolinecolor="#888888")
-    return fig
 
 
 def render_trades_table() -> None:
@@ -336,14 +235,6 @@ def render_trades_table() -> None:
             st.session_state["news_table"] = df
             st.session_state.pop(_KEY_BENCHMARK_BY_PRESET, None)
 
-    if "news_table" not in st.session_state:
-        return
-
-    if _KEY_WEEKLY_NET_CHART not in st.session_state:
-        st.session_state[_KEY_WEEKLY_NET_CHART] = _last_seven_business_days_net_bar_figure(
-            st.session_state["news_table"],
-        )
-
     df_ref = st.session_state["news_table"]
     st.session_state.pop("news_filter_date_start", None)
     st.session_state.pop("news_filter_date_end", None)
@@ -366,16 +257,12 @@ def render_trades_table() -> None:
 
     with st.expander("Filter Controls"):
         st.multiselect("Sentiment", sentiment_opts, key=_KEY_SENTIMENT)
-        total_gain_col1, total_gain_col2 = st.columns(2)
-        with total_gain_col1:
-            st.number_input("Min Gain", step=0.0001, format="%.4f", key=_KEY_GAIN_MIN)
-        with total_gain_col2:
-            st.number_input("Max Gain", step=0.0001, format="%.4f", key=_KEY_GAIN_MAX)
         text_col1, text_col2 = st.columns(2)
         with text_col1:
             st.text_input("Search Headlines", key=_KEY_HEADLINE)
         with text_col2:
             st.text_input("Search Company", key=_KEY_COMPANY)
+        st.checkbox("Only Completed Trades", key=_KEY_EXCLUDE_NONE_GAIN)
         if st.button("Apply", key=_KEY_APPLY):
             apply_news_table_filters()
 
@@ -431,16 +318,13 @@ def render_trades_table() -> None:
     )
 
     st.subheader("Charts")
-    fig_sentiment = _sentiment_outcome_bar_figure(df)
-    if df.empty:
-        st.info("No rows match the current filters.")
-    elif fig_sentiment is None:
-        st.info("No trades with positive or negative PnL in the current filter.")
-    else:
-        st.plotly_chart(fig_sentiment, use_container_width=True)
-
-    fig_weekly = st.session_state.get(_KEY_WEEKLY_NET_CHART)
-    if fig_weekly is None:
-        st.info("Weekly net win/loss chart is not available.")
-    else:
-        st.plotly_chart(fig_weekly, use_container_width=True)
+    with st.container():
+        pos_neg_trades_tab, weekly_net_trades_tab, monthly_net_trades_tab = st.tabs(
+            ["Pos Vs Neg Trades (Filtered)", "Weekly Net Trades", "Monthly Net Trades"]
+        )
+        with pos_neg_trades_tab:
+            render_sentiment_outcome_chart(df)
+        with weekly_net_trades_tab:
+            render_weekly_net_trades_chart(st.session_state["news_table"])
+        with monthly_net_trades_tab:
+            render_monthly_net_trades_chart(st.session_state["news_table"])
