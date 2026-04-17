@@ -10,10 +10,12 @@ import streamlit as st
 from alpaca.common.exceptions import APIError
 
 from src.front_end.charts import (
+    render_daily_pct_vs_vti_chart,
     render_monthly_net_trades_chart,
     render_sentiment_outcome_chart,
     render_weekly_net_trades_chart,
 )
+from src.front_end.charts.daily_pct_vs_vti import DAILY_PCT_VTI_CHART_SESSION_KEY
 from src.front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
 from src.trade_lifecycle_manager import TradeLifecycleManager
 from src.ticker_service import TickerService
@@ -234,6 +236,7 @@ def render_trades_table() -> None:
 
             st.session_state["news_table"] = df
             st.session_state.pop(_KEY_BENCHMARK_BY_PRESET, None)
+            st.session_state.pop(DAILY_PCT_VTI_CHART_SESSION_KEY, None)
 
     df_ref = st.session_state["news_table"]
     st.session_state.pop("news_filter_date_start", None)
@@ -319,8 +322,13 @@ def render_trades_table() -> None:
 
     st.subheader("Charts")
     with st.container():
-        pos_neg_trades_tab, weekly_net_trades_tab, monthly_net_trades_tab = st.tabs(
-            ["Pos Vs Neg Trades (Filtered)", "Weekly Net Trades", "Monthly Net Trades"]
+        pos_neg_trades_tab, weekly_net_trades_tab, monthly_net_trades_tab, daily_pct_vti_tab = st.tabs(
+            [
+                "Pos Vs Neg Trades (Filtered)",
+                "Weekly Net Trades",
+                "Monthly Net Trades",
+                "Daily % vs VTI",
+            ]
         )
         with pos_neg_trades_tab:
             render_sentiment_outcome_chart(df)
@@ -328,3 +336,5 @@ def render_trades_table() -> None:
             render_weekly_net_trades_chart(st.session_state["news_table"])
         with monthly_net_trades_tab:
             render_monthly_net_trades_chart(st.session_state["news_table"])
+        with daily_pct_vti_tab:
+            render_daily_pct_vs_vti_chart(st.session_state["news_table"])
