@@ -288,7 +288,7 @@ def render_trades_table() -> None:
         hide_index=True,
         column_order=col_order,
     )
-
+    st.text(f"Rows: {st.session_state['news_table_filtered'].shape[0]:,}")
     df = st.session_state["news_table_filtered"]
     total_usd = df["Total Gain"].sum()
     total_invested = df["invested"].sum()
