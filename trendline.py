@@ -16,7 +16,7 @@ import sys
 import time
 from alpaca.trading.enums import TimeInForce
 from alpaca.trading.models import Order
-from typing import List
+from typing import List, Dict
 
 
 def _shutdown_persist() -> None:
@@ -79,17 +79,26 @@ while True:
                 logger.log_error(f"SentimentService crashed: {type(e).__name__}: {e}")
                 sentiment_response = SentimentResponse("", "NONE", format_match=False, ticker_found=False, raw_response="")
 
-            # Initialize buy_order as None
-            buy_order = None
+            buy_orders: Dict[str, Order] = {}
+            sell_orders: Dict[str, None] = {}
 
-            if sentiment_response.format_match and sentiment_response.ticker_found: #this means the data is actionable
+            if sentiment_response.format_match and sentiment_response.ticker_found:
                 if sentiment_response.sentiment == "positive":
-                    order: Order = stock_trader.buy(sentiment_response.ticker, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC)
-                    if order is not None:
-                        buy_order = order  # Store for archival
+                    tickers = sentiment_response.get_ticker_list()
+                    for sym in tickers:
+                        order: Order = stock_trader.buy(
+                            sym, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
+                        )
+                        if order is not None:
+                            buy_orders[order.symbol] = order
+                            sell_orders[order.symbol] = None
+                    if tickers:
+                        logger.log_info(
+                            f"Buys for headline: {len(buy_orders)}/{len(tickers)} filled "
+                            f"({','.join(tickers)}) — {entry.get('title', '')[:80]!r}"
+                        )
 
-            # Archive with or without buy order — buy orders are automatically tracked for hold timing
-            trade_manager.archive_news_entry(name, entry, sentiment_response, buy_order)
+            trade_manager.archive_news_entry(name, entry, sentiment_response, buy_orders, sell_orders)
 
         timing_service.mark_scrape_completed()
 
