@@ -51,6 +51,37 @@ def _make_mock_order(symbol="NVDA", qty="10", status=OrderStatus.NEW,
     return order
 
 
+def _dict_orders(buy_order):
+    """Build buy_orders / sell_orders dicts for archive_news_entry."""
+    if buy_order is None:
+        return {}, {}
+    sym = buy_order.symbol
+    return {sym: buy_order}, {sym: None}
+
+
+def _archive(manager, source_name, article, sentiment, buy_order=None):
+    b, s = _dict_orders(buy_order)
+    return manager.archive_news_entry(source_name, article, sentiment, b, s)
+
+
+def _minimal_new_format_entry(article_id: str, archived_at, **extra) -> dict:
+    """Minimal archived entry dict valid for restore_from_persistent_snapshot."""
+    base = {
+        "article_id": article_id,
+        "source_name": "test",
+        "article_entry": _make_article_entry(link=article_id),
+        "sentiment_response": _make_sentiment_response(),
+        "buy_orders": {},
+        "sell_orders": {},
+        "buy_order_terminal": {},
+        "sell_order_terminal": {},
+        "resulted_in_purchase": False,
+        "archived_at": archived_at,
+    }
+    base.update(extra)
+    return base
+
+
 class TestTradeLifecycleManager(unittest.TestCase):
     """Unit tests for TradeLifecycleManager class."""
 
@@ -98,7 +129,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order()
 
-        result = manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        result = _archive(manager, "CNBC", article, sentiment, buy_order)
 
         self.assertTrue(result)
         self.assertEqual(len(manager.archived_entries), 1)
@@ -108,12 +139,12 @@ class TestTradeLifecycleManager(unittest.TestCase):
         self.assertEqual(entry['source_name'], "CNBC")
         self.assertEqual(entry['article_entry'], article)
         self.assertEqual(entry['sentiment_response'], sentiment)
-        self.assertEqual(entry['buy_order'], buy_order)
-        self.assertIsNone(entry['sell_order'])
+        self.assertEqual(entry['buy_orders']['NVDA'], buy_order)
+        self.assertIsNone(entry['sell_orders']['NVDA'])
         self.assertIsInstance(entry['archived_at'], datetime)
         self.assertTrue(entry['resulted_in_purchase'])
-        self.assertFalse(entry['buy_order_terminal'])
-        self.assertTrue(entry['sell_order_terminal'])
+        self.assertFalse(entry['buy_order_terminal']['NVDA'])
+        self.assertTrue(entry['sell_order_terminal']['NVDA'])
 
     # ---------------------------------------------------------------
     # 4. test_archive_news_entry_with_buy_order
@@ -125,14 +156,14 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order()
 
-        result = manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        result = _archive(manager, "CNBC", article, sentiment, buy_order)
 
         self.assertTrue(result)
         entry = manager.archived_entries[0]
         self.assertTrue(entry['resulted_in_purchase'])
-        self.assertEqual(entry['buy_order'], buy_order)
-        self.assertFalse(entry['buy_order_terminal'])
-        self.assertTrue(entry['sell_order_terminal'])
+        self.assertEqual(entry['buy_orders']['NVDA'], buy_order)
+        self.assertFalse(entry['buy_order_terminal']['NVDA'])
+        self.assertTrue(entry['sell_order_terminal']['NVDA'])
         # Verify buy order ID index
         self.assertIn(str(buy_order.id), manager._buy_order_id_index)
         self.assertEqual(
@@ -149,14 +180,15 @@ class TestTradeLifecycleManager(unittest.TestCase):
         article = _make_article_entry()
         sentiment = _make_sentiment_response()
 
-        result = manager.archive_news_entry("CNBC", article, sentiment, buy_order=None)
+        result = _archive(manager, "CNBC", article, sentiment, buy_order=None)
 
         self.assertTrue(result)
         entry = manager.archived_entries[0]
         self.assertFalse(entry['resulted_in_purchase'])
-        self.assertIsNone(entry['buy_order'])
-        self.assertTrue(entry['buy_order_terminal'])
-        self.assertTrue(entry['sell_order_terminal'])
+        self.assertEqual(entry['buy_orders'], {})
+        self.assertEqual(entry['sell_orders'], {})
+        self.assertEqual(entry['buy_order_terminal'], {})
+        self.assertEqual(entry['sell_order_terminal'], {})
         self.assertEqual(len(manager._buy_order_id_index), 0)
 
     # ---------------------------------------------------------------
@@ -168,8 +200,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         article = _make_article_entry()
         sentiment = _make_sentiment_response()
 
-        result1 = manager.archive_news_entry("CNBC", article, sentiment)
-        result2 = manager.archive_news_entry("CNBC", article, sentiment)
+        result1 = _archive(manager, "CNBC", article, sentiment)
+        result2 = _archive(manager, "CNBC", article, sentiment)
 
         self.assertTrue(result1)
         self.assertFalse(result2)
@@ -184,7 +216,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         article = {'title': 'No Link Article', 'summary': 'Test'}
         sentiment = _make_sentiment_response()
 
-        result = manager.archive_news_entry("CNBC", article, sentiment)
+        result = _archive(manager, "CNBC", article, sentiment)
 
         self.assertFalse(result)
         self.assertEqual(len(manager.archived_entries), 0)
@@ -200,13 +232,13 @@ class TestTradeLifecycleManager(unittest.TestCase):
         buy_order = _make_mock_order()
         sell_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
         result = manager.log_sell_order(buy_order, sell_order)
 
         self.assertTrue(result)
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['sell_order'], sell_order)
-        self.assertFalse(entry['sell_order_terminal'])
+        self.assertEqual(entry['sell_orders']['NVDA'], sell_order)
+        self.assertFalse(entry['sell_order_terminal']['NVDA'])
 
     # ---------------------------------------------------------------
     # 9. test_log_sell_order_buy_order_not_found
@@ -233,13 +265,13 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sell_order_1 = _make_mock_order(status=OrderStatus.NEW)
         sell_order_2 = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
         manager.log_sell_order(buy_order, sell_order_1)
         result = manager.log_sell_order(buy_order, sell_order_2)
 
         self.assertTrue(result)
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['sell_order'], sell_order_2)
+        self.assertEqual(entry['sell_orders']['NVDA'], sell_order_2)
 
     # ---------------------------------------------------------------
     # 11. test_update_refreshes_non_terminal_buy_order
@@ -251,7 +283,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         # Create updated order that is FILLED with hold period elapsed
         filled_time = datetime.now() - MARKET_HOLD_TIME - timedelta(minutes=5)
@@ -266,8 +298,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['buy_order'], updated_order)
-        self.assertTrue(entry['buy_order_terminal'])
+        self.assertEqual(entry['buy_orders']['NVDA'], updated_order)
+        self.assertTrue(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 1)
         self.assertEqual(manager.ready_to_sell[0], updated_order)
 
@@ -281,7 +313,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         # Filled very recently — hold period not elapsed
         filled_time = datetime.now() - timedelta(minutes=1)
@@ -296,8 +328,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['buy_order'], updated_order)
-        self.assertFalse(entry['buy_order_terminal'])
+        self.assertEqual(entry['buy_orders']['NVDA'], updated_order)
+        self.assertFalse(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 0)
 
     # ---------------------------------------------------------------
@@ -310,7 +342,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         updated_order = _make_mock_order(
             order_id=buy_order.id,
@@ -321,8 +353,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['buy_order'], updated_order)
-        self.assertFalse(entry['buy_order_terminal'])
+        self.assertEqual(entry['buy_orders']['NVDA'], updated_order)
+        self.assertFalse(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 0)
 
     # ---------------------------------------------------------------
@@ -335,7 +367,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         updated_order = _make_mock_order(
             order_id=buy_order.id,
@@ -346,7 +378,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertTrue(entry['buy_order_terminal'])
+        self.assertTrue(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 0)
 
     # ---------------------------------------------------------------
@@ -359,7 +391,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         updated_order = _make_mock_order(
             order_id=buy_order.id,
@@ -370,7 +402,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertTrue(entry['buy_order_terminal'])
+        self.assertTrue(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 0)
 
     # ---------------------------------------------------------------
@@ -383,7 +415,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         updated_order = _make_mock_order(
             order_id=buy_order.id,
@@ -394,7 +426,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertTrue(entry['buy_order_terminal'])
+        self.assertTrue(entry['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 0)
 
     # ---------------------------------------------------------------
@@ -407,9 +439,9 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.FILLED)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
         # Mark buy order as terminal so update doesn't try to refresh it
-        manager.archived_entries[0]['buy_order_terminal'] = True
+        manager.archived_entries[0]['buy_order_terminal']['NVDA'] = True
 
         sell_order = _make_mock_order(status=OrderStatus.NEW, symbol="NVDA")
         manager.log_sell_order(buy_order, sell_order)
@@ -426,8 +458,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertEqual(entry['sell_order'], updated_sell)
-        self.assertTrue(entry['sell_order_terminal'])
+        self.assertEqual(entry['sell_orders']['NVDA'], updated_sell)
+        self.assertTrue(entry['sell_order_terminal']['NVDA'])
 
     # ---------------------------------------------------------------
     # 17. test_update_skips_terminal_orders
@@ -439,7 +471,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
 
         # Archive without buy order — both terminal flags are True
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order=None)
+        _archive(manager, "CNBC", article, sentiment, buy_order=None)
 
         manager.trading_client.get_order_by_id = Mock()
 
@@ -456,12 +488,12 @@ class TestTradeLifecycleManager(unittest.TestCase):
 
         # Entry 1: no buy order (both terminal)
         article1 = _make_article_entry(link="https://example.com/1")
-        manager.archive_news_entry("CNBC", article1, _make_sentiment_response())
+        _archive(manager, "CNBC", article1, _make_sentiment_response())
 
         # Entry 2: has buy order (buy non-terminal)
         article2 = _make_article_entry(link="https://example.com/2")
         buy_order2 = _make_mock_order(status=OrderStatus.NEW)
-        manager.archive_news_entry("MarketWatch", article2, _make_sentiment_response(), buy_order2)
+        _archive(manager, "MarketWatch", article2, _make_sentiment_response(), buy_order2)
 
         # Mock: return the same order still in NEW status
         updated_order2 = _make_mock_order(order_id=buy_order2.id, status=OrderStatus.ACCEPTED)
@@ -531,8 +563,8 @@ class TestTradeLifecycleManager(unittest.TestCase):
         buy_order = _make_mock_order(status=OrderStatus.NEW, symbol="NVDA")
 
         # Step 1: Archive with buy order
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
-        self.assertFalse(manager.archived_entries[0]['buy_order_terminal'])
+        _archive(manager, "CNBC", article, sentiment, buy_order)
+        self.assertFalse(manager.archived_entries[0]['buy_order_terminal']['NVDA'])
 
         # Step 2: Update — buy order filled, hold period elapsed
         filled_time = datetime.now() - MARKET_HOLD_TIME - timedelta(minutes=10)
@@ -543,7 +575,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.trading_client.get_order_by_id = Mock(return_value=filled_buy)
         manager.update()
 
-        self.assertTrue(manager.archived_entries[0]['buy_order_terminal'])
+        self.assertTrue(manager.archived_entries[0]['buy_order_terminal']['NVDA'])
         self.assertEqual(len(manager.ready_to_sell), 1)
 
         # Step 3: Clear ready to sell
@@ -555,7 +587,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sell_order = _make_mock_order(status=OrderStatus.NEW, symbol="NVDA")
         result = manager.log_sell_order(buy_order, sell_order)
         self.assertTrue(result)
-        self.assertFalse(manager.archived_entries[0]['sell_order_terminal'])
+        self.assertFalse(manager.archived_entries[0]['sell_order_terminal']['NVDA'])
 
         # Step 5: Update — sell order filled
         filled_sell = _make_mock_order(
@@ -566,10 +598,10 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager.update()
 
         entry = manager.archived_entries[0]
-        self.assertTrue(entry['sell_order_terminal'])
-        self.assertTrue(entry['buy_order_terminal'])
-        self.assertEqual(entry['sell_order'], filled_sell)
-        self.assertEqual(entry['buy_order'], filled_buy)
+        self.assertTrue(entry['sell_order_terminal']['NVDA'])
+        self.assertTrue(entry['buy_order_terminal']['NVDA'])
+        self.assertEqual(entry['sell_orders']['NVDA'], filled_sell)
+        self.assertEqual(entry['buy_orders']['NVDA'], filled_buy)
 
     # ---------------------------------------------------------------
     # 23. test_get_entry_by_article_id_found
@@ -579,7 +611,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager = TradeLifecycleManager()
         article = _make_article_entry()
         sentiment = _make_sentiment_response()
-        manager.archive_news_entry("CNBC", article, sentiment)
+        _archive(manager, "CNBC", article, sentiment)
 
         entry = manager.get_entry_by_article_id("https://example.com/article/123")
 
@@ -606,7 +638,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager = TradeLifecycleManager()
         for i in range(3):
             article = _make_article_entry(link=f"https://example.com/article/{i}")
-            manager.archive_news_entry(f"Source{i}", article, _make_sentiment_response())
+            _archive(manager, f"Source{i}", article, _make_sentiment_response())
 
         entries = manager.get_all_entries()
 
@@ -625,7 +657,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         expected_cols = [
             'article_id', 'source_name', 'title', 'link', 'published_date', 'summary',
             'sentiment', 'ticker', 'format_match', 'ticker_found', 'raw_sentiment_response',
-            'resulted_in_purchase', 'archived_at',
+            'resulted_in_purchase', 'has_buy_order', 'archived_at',
             'buy_order_id', 'buy_order_symbol', 'buy_order_qty', 'buy_order_status',
             'buy_order_filled_at', 'buy_order_filled_avg_price', 'buy_order_terminal',
             'sell_order_id', 'sell_order_symbol', 'sell_order_qty', 'sell_order_status',
@@ -641,7 +673,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         manager = TradeLifecycleManager()
         article = _make_article_entry()
         sentiment = _make_sentiment_response()
-        manager.archive_news_entry("CNBC", article, sentiment)
+        _archive(manager, "CNBC", article, sentiment)
 
         df = manager.to_dataframe()
 
@@ -652,8 +684,30 @@ class TestTradeLifecycleManager(unittest.TestCase):
         self.assertEqual(row['sentiment'], "positive")
         self.assertEqual(row['ticker'], "NVDA")
         self.assertFalse(row['resulted_in_purchase'])
+        self.assertFalse(row['has_buy_order'])
         self.assertIsNone(row['buy_order_id'])
         self.assertIsNone(row['sell_order_id'])
+
+    def test_to_dataframe_entry_with_no_ticker_symbols(self):
+        """Archived article with sentiment ticker NONE still produces one row."""
+        manager = TradeLifecycleManager()
+        article = _make_article_entry(title="No ticker headline")
+        sentiment = _make_sentiment_response(
+            ticker="NONE",
+            ticker_found=False,
+            raw_response="neutral | NONE",
+            sentiment="neutral",
+        )
+        _archive(manager, "NPR", article, sentiment)
+
+        df = manager.to_dataframe()
+
+        self.assertEqual(len(df), 1)
+        row = df.iloc[0]
+        self.assertEqual(row["title"], "No ticker headline")
+        self.assertIsNone(row["ticker"])
+        self.assertFalse(row["has_buy_order"])
+        self.assertFalse(row["resulted_in_purchase"])
 
     # ---------------------------------------------------------------
     # 28. test_to_dataframe_single_entry_with_buy_order
@@ -665,13 +719,14 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(symbol="NVDA", qty="10", status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         df = manager.to_dataframe()
 
         self.assertEqual(len(df), 1)
         row = df.iloc[0]
         self.assertTrue(row['resulted_in_purchase'])
+        self.assertTrue(row['has_buy_order'])
         self.assertEqual(row['buy_order_id'], str(buy_order.id))
         self.assertEqual(row['buy_order_symbol'], "NVDA")
         self.assertEqual(row['buy_order_qty'], 10.0)
@@ -694,7 +749,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
             filled_avg_price="130.75"
         )
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
         manager.log_sell_order(buy_order, sell_order)
 
         df = manager.to_dataframe()
@@ -716,16 +771,16 @@ class TestTradeLifecycleManager(unittest.TestCase):
         # Entry 1: with buy order
         article1 = _make_article_entry(link="https://example.com/1", title="Article 1")
         buy_order1 = _make_mock_order(symbol="AAPL", qty="5", status=OrderStatus.NEW)
-        manager.archive_news_entry("CNBC", article1, _make_sentiment_response(), buy_order1)
+        _archive(manager, "CNBC", article1, _make_sentiment_response(), buy_order1)
 
         # Entry 2: without buy order
         article2 = _make_article_entry(link="https://example.com/2", title="Article 2")
-        manager.archive_news_entry("MarketWatch", article2, _make_sentiment_response(sentiment="neutral"))
+        _archive(manager, "MarketWatch", article2, _make_sentiment_response(sentiment="neutral"))
 
         # Entry 3: with buy order
         article3 = _make_article_entry(link="https://example.com/3", title="Article 3")
         buy_order3 = _make_mock_order(symbol="GOOGL", qty="3", status=OrderStatus.FILLED)
-        manager.archive_news_entry("WSJ", article3, _make_sentiment_response(), buy_order3)
+        _archive(manager, "WSJ", article3, _make_sentiment_response(), buy_order3)
 
         df = manager.to_dataframe()
 
@@ -747,7 +802,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
         sentiment = _make_sentiment_response()
         buy_order = _make_mock_order(status=OrderStatus.NEW)
 
-        manager.archive_news_entry("CNBC", article, sentiment, buy_order)
+        _archive(manager, "CNBC", article, sentiment, buy_order)
 
         # Update to FILLED with hold period elapsed
         filled_time = datetime.now() - MARKET_HOLD_TIME - timedelta(minutes=5)
@@ -780,7 +835,7 @@ class TestTradeLifecycleManager(unittest.TestCase):
             summary="This is the full article summary."
         )
         sentiment = _make_sentiment_response()
-        manager.archive_news_entry("FinancialTimes", article, sentiment)
+        _archive(manager, "FinancialTimes", article, sentiment)
 
         df = manager.to_dataframe()
 
@@ -797,12 +852,12 @@ class TestTradeLifecycleManager(unittest.TestCase):
         naive_at = datetime(2024, 6, 1, 12, 0, 0)
         snapshot = {
             "archived_entries": [
-                {
-                    "article_id": "https://example.com/migrated",
-                    "archived_at": naive_at,
-                }
+                _minimal_new_format_entry(
+                    "https://example.com/migrated",
+                    naive_at,
+                ),
             ],
-            "_article_id_index": {},
+            "_article_id_index": {"https://example.com/migrated": 0},
             "_buy_order_id_index": {},
             "ready_to_sell": [],
         }
@@ -811,6 +866,61 @@ class TestTradeLifecycleManager(unittest.TestCase):
         self.assertIsNotNone(at.tzinfo)
         self.assertEqual(at.tzinfo, timezone.utc)
         self.assertEqual(at.timestamp(), naive_at.timestamp())
+
+    def test_restore_rejects_legacy_scalar_orders(self):
+        """Snapshots with legacy buy_order / sell_order must not load in-app."""
+        manager = TradeLifecycleManager()
+        snapshot = {
+            "archived_entries": [
+                {
+                    "article_id": "https://example.com/legacy",
+                    "source_name": "CNBC",
+                    "article_entry": _make_article_entry(link="https://example.com/legacy"),
+                    "sentiment_response": _make_sentiment_response(),
+                    "buy_order": _make_mock_order(),
+                    "sell_order": None,
+                    "buy_order_terminal": False,
+                    "sell_order_terminal": True,
+                    "resulted_in_purchase": True,
+                    "archived_at": datetime.now(timezone.utc),
+                },
+            ],
+            "_article_id_index": {},
+            "_buy_order_id_index": {},
+            "ready_to_sell": [],
+        }
+        with self.assertRaises(ValueError) as ctx:
+            manager.restore_from_persistent_snapshot(snapshot)
+        msg = str(ctx.exception).lower()
+        self.assertIn("legacy", msg)
+        self.assertIn("migrate", msg)
+
+    def test_to_dataframe_multi_ticker_one_buy(self):
+        """One row per sentiment symbol; trade columns null when that leg did not buy."""
+        manager = TradeLifecycleManager()
+        article = _make_article_entry(link="https://example.com/multi")
+        sentiment = _make_sentiment_response(
+            ticker="NVDA,AAPL",
+            raw_response="Positive | NVDA,AAPL",
+        )
+        buy_nvda = _make_mock_order(symbol="NVDA", qty="5")
+        manager.archive_news_entry(
+            "CNBC",
+            article,
+            sentiment,
+            {"NVDA": buy_nvda},
+            {"NVDA": None},
+        )
+        df = manager.to_dataframe()
+        self.assertEqual(len(df), 2)
+        self.assertTrue((df["article_id"] == "https://example.com/multi").all())
+        nvda_row = df[df["ticker"] == "NVDA"].iloc[0]
+        aapl_row = df[df["ticker"] == "AAPL"].iloc[0]
+        self.assertTrue(nvda_row["has_buy_order"])
+        self.assertEqual(nvda_row["buy_order_id"], str(buy_nvda.id))
+        self.assertFalse(aapl_row["has_buy_order"])
+        self.assertTrue(aapl_row["resulted_in_purchase"])
+        self.assertIsNone(aapl_row["buy_order_id"])
 
 
 if __name__ == '__main__':

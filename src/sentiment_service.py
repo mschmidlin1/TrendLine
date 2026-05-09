@@ -44,10 +44,26 @@ class SentimentService(metaclass=SingletonMeta):
         and extract company ticker symbols from text.
         """
         self.instructions = """
-        You are a news analyst. For every headline/section provided:
-        1. Rate the 'Sentiment' as Positive, Neutral, or Negative.
-        3. Extract the main 'Company' mentioned and reply with the ticker symbol of the company. If there is no associated publicly traded company, reply with "None" for the ticker.
-        Response Format: [Sentiment] | [Ticker]
+        You are a news analyst. For every headline or text segment provided:
+
+        1. Rate the Sentiment as Positive, Neutral, or Negative.
+
+        2. Identify every distinct publicly traded US company that the text clearly refers to (by name or unambiguous context). For each, respond with its standard US equity ticker symbol. You must include all such companies—not only the single "main" company.
+
+        3. After the pipe, output the ticker field as follows:
+           - If there is at least one such company: a single comma-separated list of tickers with NO spaces after any comma (correct: NVDA,GLW,AAPL — incorrect: NVDA, GLW).
+           - List tickers in order of prominence in the text (the company most central or first-mentioned first). If the same company appears multiple times, include that ticker only once.
+           - If there is no clearly referenced publicly traded US company: the literal None (meaning no tickers).
+
+        Response format (one line):
+        [Sentiment] | [TickerField]
+
+        TickerField is either None, one ticker, or multiple tickers separated by commas with no spaces.
+
+        Examples:
+        Positive | NVDA,GLW
+        Neutral | AAPL
+        Negative | None
         """
         self._logger = LoggingService()
         self._ticker_service: TickerService = TickerService()
@@ -159,13 +175,8 @@ class SentimentService(metaclass=SingletonMeta):
             ticker: str = ""
             if format_match:
                 sentiment, ticker = self._parse_response(response)
-            ticker_found = True
-            if ticker.upper() == "NONE":
-                ticker_found = False
-            if ticker=="":
-                ticker_found = False
-            if not self._ticker_service.is_tradable_stock_symbol(ticker):
-                ticker_found = False
+                ticker = self._validate_and_join_tickers(ticker)
+            ticker_found = ticker != "" and ticker.upper() != "NONE"
             if sentiment not in ['positive', 'neutral', 'negative']:
                 format_match = False
                 sentiment = "NONE"
@@ -180,44 +191,51 @@ class SentimentService(metaclass=SingletonMeta):
             ticker = "NONE"
         return SentimentResponse(sentiment, ticker, format_match, ticker_found, response)
 
+    def _validate_and_join_tickers(self, ticker_field: str) -> str:
+        """
+        Split comma-separated raw tickers, keep only Alpaca-tradable symbols, dedupe, join with no spaces.
+        """
+        ticker_field = ticker_field.strip()
+        if not ticker_field or ticker_field.upper() == "NONE":
+            return "NONE"
+        validated: List[str] = []
+        for raw in ticker_field.split(","):
+            token = raw.strip().upper().replace("[", "").replace("]", "")
+            if not token or token == "NONE":
+                continue
+            token = token.split()[0]
+            if not self._ticker_service.is_tradable_stock_symbol(token):
+                continue
+            if token not in validated:
+                validated.append(token)
+        if not validated:
+            return "NONE"
+        return ",".join(validated)
+
     def _parse_response(self, response) -> Tuple[str, str]:
         """
-        Extract and clean sentiment and ticker data from the LLM response string.
-        
-        Parses a pipe-delimited response in the format "[Sentiment] | [Ticker]" or
-        "Sentiment | Ticker", performing extensive string cleaning and normalization:
-        - Splits on the pipe delimiter
-        - Removes brackets, extra whitespace, and formatting characters
-        - Converts sentiment to lowercase for consistency
-        - Converts ticker to uppercase for standard stock symbol format
-        
-        Args:
-            response (str): The raw LLM response string to parse.
-            
-        Returns:
-            Tuple[str, str]: A tuple containing (sentiment, ticker) where:
-                - sentiment: Lowercase string (e.g., "positive", "neutral", "negative")
-                - ticker: Uppercase stock symbol (e.g., "AAPL", "TSLA", "NONE")
+        Extract sentiment and raw ticker field (may be comma-separated) from the LLM response.
+        Tradability is applied in _validate_and_join_tickers.
         """
+        parts: List[str] = response.split("|", 1)
+        if len(parts) < 2:
+            return ("", "")
 
-        split_response: List[str] = response.split("|")
+        sentiment = parts[0]
+        ticker_raw = parts[1]
 
-        #parse sentiment
-        sentiment, ticker = split_response[0], split_response[1]
-        sentiment = sentiment.split()[0]
+        sentiment = sentiment.split()[0] if sentiment.split() else ""
         sentiment = sentiment.strip()
         sentiment = sentiment.lower()
         sentiment = sentiment.replace("[", "")
         sentiment = sentiment.replace("]", "")
 
-        #parse ticker
-        ticker = ticker.lstrip()
-        ticker = ticker.split()[0]
-        ticker = ticker.replace("[", "")
-        ticker = ticker.replace("]", "")
-        ticker = ticker.upper()
+        # First line only — models often append explanation after a newline.
+        ticker_raw = ticker_raw.strip().split("\n", 1)[0].strip()
+        ticker_raw = ticker_raw.replace("[", "")
+        ticker_raw = ticker_raw.replace("]", "")
 
-        return (sentiment, ticker)
+        return (sentiment, ticker_raw)
     
     def _response_matches_format(self, text) -> bool:
         """
