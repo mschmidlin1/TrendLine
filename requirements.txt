@@ -8,3 +8,5 @@ numpy
 alpaca-py
 feedparser
 ollama
+wordcloud
+matplotlib

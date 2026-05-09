@@ -21,6 +21,9 @@ from src.front_end.charts.gain_pct_by_news_source import (
 from src.front_end.charts.headlines_by_news_source import (
     render_headlines_by_news_source_charts,
 )
+from src.front_end.charts.pnl_word_clouds import (
+    render_pnl_word_cloud_charts,
+)
 
 __all__ = [
     "render_daily_pct_vs_vti_chart",
@@ -28,6 +31,7 @@ __all__ = [
     "render_gain_pct_by_news_source_chart",
     "render_headlines_by_news_source_charts",
     "render_monthly_net_trades_chart",
+    "render_pnl_word_cloud_charts",
     "render_sentiment_outcome_chart",
     "render_weekly_net_trades_chart",
 ]

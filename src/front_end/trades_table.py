@@ -15,6 +15,7 @@ from src.front_end.charts import (
     render_gain_pct_by_news_source_chart,
     render_headlines_by_news_source_charts,
     render_monthly_net_trades_chart,
+    render_pnl_word_cloud_charts,
     render_sentiment_outcome_chart,
     render_weekly_net_trades_chart,
 )
@@ -343,6 +344,7 @@ def render_trades_table() -> None:
             daily_pct_vti_1m_tab,
             gain_pct_by_source_tab,
             headlines_by_source_tab,
+            pnl_word_clouds_tab,
         ) = st.tabs(
             [
                 "Pos Vs Neg Trades (Filtered)",
@@ -352,6 +354,7 @@ def render_trades_table() -> None:
                 "Daily % vs VTI (1M)",
                 "Gain % by news source",
                 "Headlines by source",
+                "Headline word clouds (PnL)",
             ]
         )
         with pos_neg_trades_tab:
@@ -368,3 +371,5 @@ def render_trades_table() -> None:
             render_gain_pct_by_news_source_chart(df)
         with headlines_by_source_tab:
             render_headlines_by_news_source_charts(df)
+        with pnl_word_clouds_tab:
+            render_pnl_word_cloud_charts(df)
