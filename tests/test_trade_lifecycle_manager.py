@@ -688,6 +688,27 @@ class TestTradeLifecycleManager(unittest.TestCase):
         self.assertIsNone(row['buy_order_id'])
         self.assertIsNone(row['sell_order_id'])
 
+    def test_to_dataframe_entry_with_no_ticker_symbols(self):
+        """Archived article with sentiment ticker NONE still produces one row."""
+        manager = TradeLifecycleManager()
+        article = _make_article_entry(title="No ticker headline")
+        sentiment = _make_sentiment_response(
+            ticker="NONE",
+            ticker_found=False,
+            raw_response="neutral | NONE",
+            sentiment="neutral",
+        )
+        _archive(manager, "NPR", article, sentiment)
+
+        df = manager.to_dataframe()
+
+        self.assertEqual(len(df), 1)
+        row = df.iloc[0]
+        self.assertEqual(row["title"], "No ticker headline")
+        self.assertIsNone(row["ticker"])
+        self.assertFalse(row["has_buy_order"])
+        self.assertFalse(row["resulted_in_purchase"])
+
     # ---------------------------------------------------------------
     # 28. test_to_dataframe_single_entry_with_buy_order
     # ---------------------------------------------------------------

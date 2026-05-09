@@ -345,9 +345,49 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
             'sell_order_terminal': sell_term if sell_order else True,
         }
 
+    def _row_without_ticker(
+        self,
+        entry: Dict[str, Any],
+        article_entry: Any,
+        sentiment: SentimentResponse,
+    ) -> Dict[str, Any]:
+        """Single table row when sentiment has no symbols (e.g. ticker NONE)."""
+        # Normal flow: no tickers => empty buy_orders; non-empty buys with empty ticker list would not show here.
+        return {
+            'article_id': entry['article_id'],
+            'source_name': entry['source_name'],
+            'title': article_entry.get('title', None),
+            'link': article_entry.get('link', None),
+            'published_date': article_entry.get('published', None),
+            'summary': article_entry.get('summary', None),
+            'sentiment': sentiment.sentiment,
+            'ticker': None,
+            'format_match': sentiment.format_match,
+            'ticker_found': sentiment.ticker_found,
+            'raw_sentiment_response': sentiment.raw_response,
+            'resulted_in_purchase': entry['resulted_in_purchase'],
+            'has_buy_order': False,
+            'archived_at': entry['archived_at'],
+            'buy_order_id': None,
+            'buy_order_symbol': None,
+            'buy_order_qty': None,
+            'buy_order_status': None,
+            'buy_order_filled_at': None,
+            'buy_order_filled_avg_price': None,
+            'buy_order_terminal': True,
+            'sell_order_id': None,
+            'sell_order_symbol': None,
+            'sell_order_qty': None,
+            'sell_order_status': None,
+            'sell_order_filled_at': None,
+            'sell_order_filled_avg_price': None,
+            'sell_order_terminal': True,
+        }
+
     def to_dataframe(self) -> pd.DataFrame:
         """
-        One row per symbol in sentiment.get_ticker_list(), with duplicated article/sentiment metadata.
+        One row per archived article: one row per sentiment symbol when present, otherwise
+        one row with null ticker so headlines still appear in the UI.
         """
         expected_columns = [
             'article_id', 'source_name', 'title', 'link', 'published_date', 'summary',
@@ -368,8 +408,9 @@ class TradeLifecycleManager(metaclass=SingletonMeta):
             sentiment = entry['sentiment_response']
             symbols = sentiment.get_ticker_list()
             if not symbols:
-                continue
-            for sym in symbols:
-                rows.append(self._row_for_symbol(entry, article_entry, sentiment, sym))
+                rows.append(self._row_without_ticker(entry, article_entry, sentiment))
+            else:
+                for sym in symbols:
+                    rows.append(self._row_for_symbol(entry, article_entry, sentiment, sym))
 
         return pd.DataFrame(rows)
