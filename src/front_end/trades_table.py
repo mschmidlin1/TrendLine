@@ -224,7 +224,15 @@ def render_trades_table() -> None:
 
             ticker_service = TickerService()
 
-            df["Company"] = df["ticker"].apply(ticker_service.lookup_stock_name)
+            def _company_cell(t: object) -> str | None:
+                if t is None or (isinstance(t, float) and pd.isna(t)):
+                    return None
+                s = str(t).strip()
+                if not s:
+                    return None
+                return ticker_service.lookup_stock_name(s)
+
+            df["Company"] = df["ticker"].apply(_company_cell)
             df = df.rename(columns={
                 "pnl": "Total Gain",
                 "pnl_pct": "Total Gain %",

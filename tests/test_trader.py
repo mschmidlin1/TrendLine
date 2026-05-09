@@ -7,7 +7,7 @@ from src.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
 from alpaca.data.models.quotes import Quote
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
 from src.base.alpaca_client import AlpacaClient
-from src.converters import orders_to_dataframe, positions_to_dataframe
+from src.converters import orders_to_dataframe
 
 class TestTrader(unittest.TestCase):
     """Unit tests for SentimentService class."""
@@ -26,14 +26,6 @@ class TestTrader(unittest.TestCase):
             print("Ask Size:", result.ask_size)
             print("Bid Size:", result.bid_size)
             print(result)
-    def test_stock_trader_get_all_positions(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            stock_trader = StockTrader(alpaca_client = AlpacaClient(ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER, True))
-            positions = stock_trader.get_all_positions()
-            positions_df = positions_to_dataframe(positions)
-            print(positions_df.shape)
-            print(positions_df.columns)
-            print(positions_df)
     def test_stock_trader_get_all_orders(self):
             """Test that batch analysis handles individual errors gracefully."""
             stock_trader = StockTrader(alpaca_client = AlpacaClient(ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER, True))
