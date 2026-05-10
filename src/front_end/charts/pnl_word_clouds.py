@@ -8,6 +8,18 @@ import pandas as pd
 import streamlit as st
 from wordcloud import STOPWORDS, WordCloud
 
+_CUSTOM_STOPWORDS = frozenset(
+    {
+        "stock",
+        "stocks",
+        "says",
+        "say",
+        "said",
+        "s"
+    }
+)
+_STOPWORDS = STOPWORDS | _CUSTOM_STOPWORDS
+
 
 def prepare_article_pnl_buckets(
     df: pd.DataFrame,
@@ -48,7 +60,7 @@ def _wordcloud_figure(text: str) -> plt.Figure:
         width=800,
         height=400,
         background_color="white",
-        stopwords=STOPWORDS,
+        stopwords=_STOPWORDS,
         colormap="viridis",
     ).generate(text)
     fig, ax = plt.subplots(figsize=(10, 5))

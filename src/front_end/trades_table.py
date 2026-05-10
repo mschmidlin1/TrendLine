@@ -17,6 +17,7 @@ from src.front_end.charts import (
     render_monthly_net_trades_chart,
     render_pnl_word_cloud_charts,
     render_sentiment_outcome_chart,
+    render_timing_category_pnl_chart,
     render_weekly_net_trades_chart,
 )
 from src.front_end.charts.daily_pct_vs_vti import DAILY_PCT_VTI_CHART_SESSION_KEY
@@ -345,6 +346,7 @@ def render_trades_table() -> None:
             gain_pct_by_source_tab,
             headlines_by_source_tab,
             pnl_word_clouds_tab,
+            timing_category_pnl_tab,
         ) = st.tabs(
             [
                 "Pos Vs Neg Trades (Filtered)",
@@ -355,6 +357,7 @@ def render_trades_table() -> None:
                 "Gain % by news source",
                 "Headlines by source",
                 "Headline word clouds (PnL)",
+                "Timing categories (PnL)",
             ]
         )
         with pos_neg_trades_tab:
@@ -373,3 +376,5 @@ def render_trades_table() -> None:
             render_headlines_by_news_source_charts(df)
         with pnl_word_clouds_tab:
             render_pnl_word_cloud_charts(df)
+        with timing_category_pnl_tab:
+            render_timing_category_pnl_chart(df)
