@@ -42,7 +42,7 @@ def _sentiment_outcome_bar_figure(counts: _SentimentCounts) -> go.Figure:
         ]
     )
     fig.update_layout(
-        title=dict(text="Count of Positive Vs Negative Gain Trades", x=0.5, xanchor="center"),
+        title=dict(text="Count of Positive Vs Negative Gain Trades ---- Filtered by Article Date and Filter Controls", x=0.5, xanchor="center"),
         height=360,
         margin=dict(l=10, r=10, t=60, b=10),
         yaxis_title="Count",

@@ -12,8 +12,12 @@ from alpaca.common.exceptions import APIError
 from src.front_end.charts import (
     render_daily_pct_vs_vti_chart,
     render_daily_pct_vs_vti_one_month_chart,
+    render_gain_pct_by_news_source_chart,
+    render_headlines_by_news_source_charts,
     render_monthly_net_trades_chart,
+    render_pnl_word_cloud_charts,
     render_sentiment_outcome_chart,
+    render_timing_category_pnl_chart,
     render_weekly_net_trades_chart,
 )
 from src.front_end.charts.daily_pct_vs_vti import DAILY_PCT_VTI_CHART_SESSION_KEY
@@ -295,7 +299,7 @@ def render_trades_table() -> None:
         hide_index=True,
         column_order=col_order,
     )
-
+    st.text(f"Rows: {st.session_state['news_table_filtered'].shape[0]:,}")
     df = st.session_state["news_table_filtered"]
     total_usd = df["Total Gain"].sum()
     total_invested = df["invested"].sum()
@@ -339,6 +343,10 @@ def render_trades_table() -> None:
             monthly_net_trades_tab,
             daily_pct_vti_7d_tab,
             daily_pct_vti_1m_tab,
+            gain_pct_by_source_tab,
+            headlines_by_source_tab,
+            pnl_word_clouds_tab,
+            timing_category_pnl_tab,
         ) = st.tabs(
             [
                 "Pos Vs Neg Trades (Filtered)",
@@ -346,6 +354,10 @@ def render_trades_table() -> None:
                 "Monthly Net Trades",
                 "Daily % vs VTI (7D)",
                 "Daily % vs VTI (1M)",
+                "Gain % by news source",
+                "Headlines by source",
+                "Headline word clouds (PnL)",
+                "Timing categories (PnL)",
             ]
         )
         with pos_neg_trades_tab:
@@ -358,3 +370,11 @@ def render_trades_table() -> None:
             render_daily_pct_vs_vti_chart(st.session_state["news_table"])
         with daily_pct_vti_1m_tab:
             render_daily_pct_vs_vti_one_month_chart(st.session_state["news_table"])
+        with gain_pct_by_source_tab:
+            render_gain_pct_by_news_source_chart(df)
+        with headlines_by_source_tab:
+            render_headlines_by_news_source_charts(df)
+        with pnl_word_clouds_tab:
+            render_pnl_word_cloud_charts(df)
+        with timing_category_pnl_tab:
+            render_timing_category_pnl_chart(df)
