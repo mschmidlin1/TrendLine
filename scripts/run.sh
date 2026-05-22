@@ -42,6 +42,7 @@ wrap_ngrok() {
 
 gui_terminal_available() {
   [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || return 1
+  command -v ptyxis &>/dev/null && return 0
   command -v gnome-terminal &>/dev/null && return 0
   command -v konsole &>/dev/null && return 0
   command -v xfce4-terminal &>/dev/null && return 0
@@ -54,6 +55,10 @@ try_open_terminal() {
   local title="$1"
   local inner="$2"
 
+  if command -v ptyxis &>/dev/null; then
+    ptyxis --new-window --title="$title" -d "$ROOT" -- bash -c "$inner" &
+    return 0
+  fi
   if command -v gnome-terminal &>/dev/null; then
     gnome-terminal --title="$title" --working-directory="$ROOT" -- bash -c "$inner"
     return 0
