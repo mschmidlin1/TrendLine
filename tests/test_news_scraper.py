@@ -28,7 +28,7 @@ class TestNewsScraper(unittest.TestCase):
 	def test_get_unserved_articles_returns_tuples(self):
 		"""Test that get_unserved_articles returns list of tuples with correct structure"""
 		service = NewsScrapingService()
-		articles = service.get_unserved_articles()
+		articles = service.get_new_articles()
 		
 		# Verify return type is list
 		self.assertIsInstance(articles, list)
@@ -51,14 +51,14 @@ class TestNewsScraper(unittest.TestCase):
 		service = NewsScrapingService()
 		
 		# Get first batch of articles
-		first_batch = service.get_unserved_articles()
+		first_batch = service.get_new_articles()
 		
 		if len(first_batch) > 0:
 			# Store article links from first batch
 			first_batch_links = [entry.get('link') for source, entry in first_batch]
 			
 			# Get second batch
-			second_batch = service.get_unserved_articles()
+			second_batch = service.get_new_articles()
 			second_batch_links = [entry.get('link') for source, entry in second_batch]
 			
 			# Assert no articles from first batch appear in second batch
@@ -73,7 +73,7 @@ class TestNewsScraper(unittest.TestCase):
 		service = NewsScrapingService()
 		
 		# Get unserved articles
-		articles = service.get_unserved_articles()
+		articles = service.get_new_articles()
 		
 		if len(articles) > 0:
 			# Extract a link from returned articles
@@ -91,14 +91,14 @@ class TestNewsScraper(unittest.TestCase):
 		service = NewsScrapingService()
 		
 		# Get unserved articles (marks them as served)
-		first_batch = service.get_unserved_articles()
+		first_batch = service.get_new_articles()
 		first_count = len(first_batch)
 		
 		# Reset served articles
 		service.reset_served_articles()
 		
 		# Get unserved articles again
-		second_batch = service.get_unserved_articles()
+		second_batch = service.get_new_articles()
 		second_count = len(second_batch)
 		
 		# Assert same count or more articles are available after reset
@@ -113,7 +113,7 @@ class TestNewsScraper(unittest.TestCase):
 		
 		# Call get_unserved_articles multiple times
 		for _ in range(3):
-			articles = service.get_unserved_articles()
+			articles = service.get_new_articles()
 			links = [entry.get('link') for source, entry in articles]
 			all_links.extend(links)
 		
@@ -125,7 +125,7 @@ class TestNewsScraper(unittest.TestCase):
 		service = NewsScrapingService()
 		
 		# Get all unserved articles (exhausts current articles)
-		service.get_unserved_articles()
+		service.get_new_articles()
 		
 		# Call update
 		updated = service.update()
@@ -138,7 +138,7 @@ class TestNewsScraper(unittest.TestCase):
 		service = NewsScrapingService()
 		
 		# Get unserved articles
-		articles = service.get_unserved_articles()
+		articles = service.get_new_articles()
 		
 		# For each article, verify entry has 'link' field
 		for source, entry in articles:

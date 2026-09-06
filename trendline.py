@@ -1,3 +1,4 @@
+from plotly import data
 from src.market_monitor import MarketMonitorService
 from src.news_scraper import NewsScrapingService
 from src.sentiment_service import SentimentService
@@ -9,7 +10,7 @@ from src.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
 from src.trade_lifecycle_manager import TradeLifecycleManager
 from src.persistent_data_service import PersistentDataService
 from src.configs import OLLAMA_WARMUP_ON_STARTUP
-
+from src.database.db_service import DatabaseService
 import atexit
 import signal
 import sys
@@ -25,9 +26,10 @@ def _shutdown_persist() -> None:
 
 def _handle_stop_signal(signum, frame) -> None:
     PersistentDataService().save_all(reason="shutdown")
+    database_service.close()
     sys.exit(0)
 
-
+database_service = DatabaseService()
 sentiment_service = SentimentService()  # analyzes the sentiment of news headlines
 news_scraper = NewsScrapingService(skip_initial_scrape=True)  # state restored by PersistentDataService when present
 market_monitor = MarketMonitorService()  # tells you if the market is open and how long until it opens
@@ -51,6 +53,7 @@ if OLLAMA_WARMUP_ON_STARTUP:
     logger.log_info("Warming up Ollama sentiment service (non-fatal).")
     sentiment_service.warmup()
 
+database_service.open()
 while True:
     """
     Buying Logic
@@ -66,14 +69,14 @@ while True:
     """
     if timing_service.is_time_to_scrape():
         news_scraper.update()
-        article_tuples = news_scraper.get_unserved_articles()
+        article_tuples = news_scraper.get_new_articles()
         logger.log_info(f"Found {len(article_tuples)} new articles.")
         for name, entry in article_tuples:
             if entry.get('title')=="" or entry.get('title') is None:
                 logger.log_warning(f"No headline found for article. {name} --- {entry.get('link', '')}")
                 continue
             try:
-                sentiment_response: SentimentResponse = sentiment_service.analyze_sentiment(entry.get('title'))
+                sentiment_response: SentimentResponse = sentiment_service.analyze_sentiment(entry.get('title'), entry)
             except Exception as e:
                 # SentimentService is intended to never raise, but guard the main loop regardless.
                 logger.log_error(f"SentimentService crashed: {type(e).__name__}: {e}")
@@ -86,7 +89,7 @@ while True:
                 if sentiment_response.sentiment == "positive":
                     tickers = sentiment_response.get_ticker_list()
                     for sym in tickers:
-                        order: Order = stock_trader.buy(
+                        order: Order | None = stock_trader.buy(
                             sym, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
                         )
                         if order is not None:
@@ -125,7 +128,7 @@ while True:
     """
     trade_manager.update()
 
-    ready_to_sell_orders: List[Order] = trade_manager.check_ready_to_sell()
+    ready_to_sell_orders = trade_manager.check_ready_to_sell()
     trade_manager.clear_ready_to_sell()
 
     for buy_order in ready_to_sell_orders:

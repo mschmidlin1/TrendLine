@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime
+from datetime import datetime, timezone
 import os
 from src.configs import RSS_FEED_URLS
 from src.base.singleton import SingletonMeta
@@ -8,36 +9,23 @@ import feedparser
 from typing import List, Dict, Tuple, Any
 from src.base.tl_logger import LoggingService
 from feedparser.util import FeedParserDict
+from src.database.db_service import DatabaseService
+from psycopg.types.json import Jsonb
+import json
+from time import struct_time
 
 class NewsScrapingService(metaclass=SingletonMeta):
     def __init__(self, rss_feeds: Dict[str, str] = RSS_FEED_URLS, skip_initial_scrape: bool = False):
         self._logger = LoggingService()
         self.rss_feeds: Dict[str, str] = rss_feeds
-        self.served_articles: set = set()
         if skip_initial_scrape:
             self.news_data = {name: feedparser.parse('') for name in self.rss_feeds}
         else:
-            self.news_data = self._scrape_news()
+            self.news_data = self._initial_scrape()
         self._logger.log_info("Scraping service initialized")
+        self.db_service = DatabaseService()
 
-    def get_persistent_snapshot(self) -> Dict[str, Any]:
-        """Return in-memory state to be persisted across restarts."""
-        return {
-            'rss_feeds': self.rss_feeds,
-            'served_articles': self.served_articles,
-            'news_data': self.news_data,
-        }
-
-    def restore_from_persistent_snapshot(self, snapshot: Dict[str, Any]) -> None:
-        """Restore state from :meth:`get_persistent_snapshot`."""
-        for key in ('rss_feeds', 'served_articles', 'news_data'):
-            if key not in snapshot:
-                raise ValueError(f"Invalid persistent snapshot: missing '{key}'")
-        self.rss_feeds = snapshot['rss_feeds']
-        self.served_articles = snapshot['served_articles']
-        self.news_data = snapshot['news_data']
-
-    def _scrape_news(self) -> Dict[str, FeedParserDict]:
+    def _initial_scrape(self) -> Dict[str, FeedParserDict]:
         """
         Scrapes the news using the `self.rss_feeds` and returns the data.
 
@@ -50,8 +38,42 @@ class NewsScrapingService(metaclass=SingletonMeta):
             if getattr(news_data[name], 'status') != 200:
                 self._logger.log_warning(f"When doing first scraping, unexpected status: {getattr(news_data[name], 'status')} ----- {url}")
         return news_data
-    
-    def _check_for_new(self, url: str, feed: FeedParserDict) -> Tuple[bool, FeedParserDict]:
+
+
+    # def get_persistent_snapshot(self) -> Dict[str, Any]:
+    #     """Return in-memory state to be persisted across restarts."""
+    #     return {
+    #         'rss_feeds': self.rss_feeds,
+    #         'served_articles': self.served_articles,
+    #         'news_data': self.news_data,
+    #     }
+
+    # def restore_from_persistent_snapshot(self, snapshot: Dict[str, Any]) -> None:
+    #     """Restore state from :meth:`get_persistent_snapshot`."""
+    #     for key in ('rss_feeds', 'served_articles', 'news_data'):
+    #         if key not in snapshot:
+    #             raise ValueError(f"Invalid persistent snapshot: missing '{key}'")
+    #     self.rss_feeds = snapshot['rss_feeds']
+    #     self.served_articles = snapshot['served_articles']
+    #     self.news_data = snapshot['news_data']
+
+    def update(self) -> bool:
+        """
+        Updates the scraping for all the rss feeds.
+
+        Returns True if any of the rss feeds were updated.
+        """
+        new_data = False
+        for name in self.rss_feeds.keys():
+            url = self.rss_feeds[name]
+            feed = self.news_data[name]
+            (new, new_feed) = self._check_for_new(url, feed)
+            if new and new_feed:
+                self.news_data[name] = new_feed
+                new_data = True
+        return new_data
+
+    def _check_for_new(self, url: str, feed: FeedParserDict) -> Tuple[bool, FeedParserDict | None]:
         """
         Checks for updated rss feed for a specific URL.
         If it's updated, returns the new FeedParserDict.
@@ -77,23 +99,7 @@ class NewsScrapingService(metaclass=SingletonMeta):
         self._logger.log_warning(f"Unexpected return status {str(getattr(new_feed, 'status', None))} from feedparser for {url}")
         return (False, feed)
 
-    def update(self) -> bool:
-        """
-        Updates the scraping for all the rss feeds.
-
-        Returns True if any of the rss feeds were updated.
-        """
-        new_data = False
-        for name in self.rss_feeds.keys():
-            url = self.rss_feeds[name]
-            feed = self.news_data[name]
-            (new, new_feed) = self._check_for_new(url, feed)
-            if new:
-                self.news_data[name] = new_feed
-                new_data = True
-        return new_data
-
-    def _scrape_rss_feed(self, rss_url: str, **kwargs) -> FeedParserDict:
+    def _scrape_rss_feed(self, rss_url: str, **kwargs) -> FeedParserDict | None:
         """
         Scrape news from RSS feed instead of web scraping.
         More reliable and respectful of website policies.
@@ -113,7 +119,7 @@ class NewsScrapingService(metaclass=SingletonMeta):
             self._logger.log_error(f"RSS scrape failed for {rss_url} with error {e}")
             return None
     
-    def get_unserved_articles(self) -> List[Tuple[str, FeedParserDict]]:
+    def get_new_articles(self) -> List[Tuple[str, FeedParserDict]]:
         """
         Retrieve unserved articles and automatically mark them as served.
         
@@ -122,13 +128,13 @@ class NewsScrapingService(metaclass=SingletonMeta):
         List[Tuple[str, dict]] - List of tuples (source_name, entry_dict)
         """
         unserved = []
-        
+        served_article_ids = self._get_served_article_ids()
         # Collect all unserved articles from all feeds
         for source_name, feed in self.news_data.items():
             if feed and hasattr(feed, 'entries'):
                 for entry in feed.entries:
-                    article_id = self._generate_article_id(entry)
-                    if article_id and article_id not in self.served_articles:
+                    article_id = entry.get('link', '')
+                    if article_id and article_id not in served_article_ids:
                         unserved.append((source_name, entry, article_id))
         
         # Sort by published date descending (newest first)
@@ -148,46 +154,47 @@ class NewsScrapingService(metaclass=SingletonMeta):
         
         # Mark all returned articles as served
         for source_name, entry, article_id in unserved:
-            self.served_articles.add(article_id)
+            self._archive_article(source_name, entry)
         
         # Return without article_id (just source_name and entry)
         return [(source_name, entry) for source_name, entry, article_id in unserved]
-    
-    def is_article_served(self, article_link: str) -> bool:
-        """
-        Check if a specific article has been served.
-        
-        Parameters:
-        -----------
-        article_link: str - Article URL
-        
-        Returns:
-        --------
-        bool - True if served, False otherwise
-        """
-        return article_link in self.served_articles
-    
-    def reset_served_articles(self) -> None:
-        """
-        Clear all served article tracking.
-        Useful for testing or reset scenarios.
-        """
-        self.served_articles.clear()
-    
-    def _generate_article_id(self, entry: dict) -> str:
-        """
-        Extract unique identifier for an article.
-        
-        Parameters:
-        -----------
-        entry: dict - RSS feed entry dictionary
-        
-        Returns:
-        --------
-        str - Article link (used as unique identifier)
-        """
-        return entry.get('link', '')
 
+    def _get_served_article_ids(self) -> List[str]:
+        rows = self.db_service.fetch_all("SELECT article_id FROM articles")
+        return [row[0] for row in rows]
 
+    def _archive_article(self, source: str, article: FeedParserDict):
 
+        article_dict = {}
+        article_dict["article_id"] = article.get('link')
+        row = self.db_service.fetch_one(
+            "SELECT id FROM news_sources WHERE url = %s",
+            (self.rss_feeds[source],),
+        )
+        source_id = row[0] if row else None
+        article_dict["source_id"] = source_id
+        article_dict["title"] = article.get('title', '')
+        article_dict["summary"] = article.get('summary', '')
+        parsed = article.get("published_parsed")
+        if isinstance(parsed, struct_time):
+            article_dict["published_at"] = datetime(
+                parsed.tm_year,
+                parsed.tm_mon,
+                parsed.tm_mday,
+                parsed.tm_hour,
+                parsed.tm_min,
+                parsed.tm_sec,
+                tzinfo=timezone.utc,
+            )
+        else:
+            article_dict["published_at"] = None
+        article_dict["published_raw"] = article.get('published', '')
+        article_dict["rss_guid"] = article.get('id')
+        article_dict["raw_entry"] = Jsonb(json.loads(json.dumps(dict(article), default=str)))
+        article_dict["archived_at"] = datetime.now(timezone.utc)
+        article_dict["sentiment_analyzed_at"] = None
+        article_dict["resulted_in_purchase"] = False
+        article_dict["sentiment_raw_response"] = None
+        article_dict["sentiment_format_match"] = None
 
+        self.db_service.insert_row_dict("articles", article_dict)
