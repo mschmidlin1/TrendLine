@@ -151,3 +151,20 @@ CREATE INDEX idx_sell_orders_symbol ON sell_orders(symbol);
 CREATE INDEX idx_sell_orders_open
   ON sell_orders(submitted_at)
   WHERE NOT is_terminal;
+
+
+CREATE TABLE heartbeat (
+  id               INT PRIMARY KEY,  -- always 1
+  last_seen        TIMESTAMPTZ NOT NULL
+);
+
+INSERT INTO heartbeat (id, last_seen) VALUES (1, now())
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE logs(
+  created_at      TIMESTAMPTZ NOT NULL,
+  level           TEXT NOT NULL,
+  message         TEXT NOT NULL
+);
+
+CREATE INDEX idx_logs_created_at ON logs (created_at DESC);

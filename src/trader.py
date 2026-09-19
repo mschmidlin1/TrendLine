@@ -332,7 +332,7 @@ class StockTrader(Trader, metaclass=SingletonMeta):
             **kwargs: Arbitrary keyword arguments passed to parent Trader class.
         """
         super().__init__(*args, **kwargs)
-        self._logger.log_debug("Instace of Stock_Trader() class created.")
+        self._logger.log_info("Instace of Stock_Trader() class created.")
         self.asset_class = 'us_equity'
 
     def get_quote(self, symbol: str) -> Quote:
@@ -395,7 +395,7 @@ class CryptoTrader(Trader, metaclass=SingletonMeta):
             **kwargs: Arbitrary keyword arguments passed to parent Trader class.
         """
         super().__init__(*args, **kwargs)
-        self._logger.log_debug("Instace of Crypto_Trader() class created.")
+        self._logger.log_info("Instace of Crypto_Trader() class created.")
         self.asset_class = 'crypto'
 
     def get_quote(self, symbol: str):

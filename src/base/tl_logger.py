@@ -3,10 +3,10 @@ import os
 import sys
 
 from filelock import FileLock
-
-from src.configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH
+from datetime import datetime, timezone
+from src.configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH, LOG_RETENTION_DAYS
 from src.base.singleton import SingletonMeta
-
+from src.database.db_service import DatabaseService
 
 class LockingFileHandler(logging.FileHandler):
     """
@@ -26,6 +26,26 @@ class LockingFileHandler(logging.FileHandler):
             self.flush()
         finally:
             self._file_lock.release()
+
+class PostgresLogHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        db = DatabaseService()
+        if db._conn is None:
+            return
+        try:
+            db.execute(
+                """
+                INSERT INTO logs (created_at, level, message)
+                VALUES (%s, %s, %s)
+                """,
+                (
+                    datetime.fromtimestamp(record.created, tz=timezone.utc),
+                    record.levelname,
+                    record.getMessage(),
+                ),
+            )
+        except Exception:
+            self.handleError(record)  # default: print to stderr, do not log
 
 
 class LoggingService(metaclass=SingletonMeta):
@@ -72,6 +92,10 @@ class LoggingService(metaclass=SingletonMeta):
         file_handler.setLevel(getattr(logging, self.file_log_level))
         file_handler.setFormatter(formatter)
 
+        db_handler = PostgresLogHandler()
+        db_handler.setLevel(logging.INFO)
+
+        root.addHandler(db_handler)
         root.addHandler(console)
         root.addHandler(file_handler)
 
@@ -119,3 +143,19 @@ class LoggingService(metaclass=SingletonMeta):
             **kwargs: Additional keyword arguments to pass to the logger.
         """
         self.logger.error(message, **kwargs)
+    def purge_old_logs(self) -> None:
+        db = DatabaseService()
+        if db._conn is None:
+            return
+        try:
+            db.execute(
+                """
+                DELETE FROM logs
+                WHERE created_at < now() - (%s * INTERVAL '1 day')
+                """,
+                (LOG_RETENTION_DAYS,),
+            )
+        except Exception as e:
+            # do not self.log_error here if you want to be extra safe;
+            # file/stdout is enough. log_error is OK too: one new row, no loop.
+            self.log_warning(f"Log purge failed: {type(e).__name__}: {e}")

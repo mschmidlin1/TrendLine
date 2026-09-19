@@ -1,7 +1,5 @@
-from base import sentiment_response
 from datetime import datetime, timezone
 from src.base.singleton import SingletonMeta
-from src.base.sentiment_response import SentimentResponse
 from feedparser.util import FeedParserDict
 from src.base.timer import Timer
 from src.database.db_service import DatabaseService
@@ -77,7 +75,25 @@ class SentimentService(metaclass=SingletonMeta):
         self._ticker_service: TickerService = TickerService()
         self._db_service = DatabaseService()
     
-    def analyze_sentiment(self, text: str, article: FeedParserDict) -> None:
+    def archive_no_title(self, article_id: str):
+        """Update articles table for article with no title."""
+        self._db_service.execute(
+            """
+            UPDATE articles
+            SET sentiment_analyzed_at = %s,
+                sentiment_raw_response = %s,
+                sentiment_format_match = %s
+            WHERE article_id = %s
+            """,
+            (
+                datetime.now(timezone.utc),
+                None,
+                False,
+                article_id,
+            ),
+        )
+    
+    def analyze_sentiment(self, text: str, article_id: str) -> None:
         """
         Analyze the sentiment of financial news text using an LLM.
         
@@ -91,7 +107,7 @@ class SentimentService(metaclass=SingletonMeta):
             SentimentResponse: A dataclass containing the sentiment classification, ticker symbol,
                              format validation flags, and the raw LLM response.
         """
-        article_id = article.get('link')
+
         if not isinstance(article_id, str) or not article_id:
             raise TypeError("article ID must be a non-empty string")
         response = self._get_model_response(text)
@@ -106,7 +122,7 @@ class SentimentService(metaclass=SingletonMeta):
                 """,
                 (
                     datetime.now(timezone.utc),
-                    None,#does none work for this column?
+                    None,
                     False,
                     article_id,
                 ),
@@ -126,7 +142,7 @@ class SentimentService(metaclass=SingletonMeta):
                 datetime.now(timezone.utc),
                 response,
                 format_match,
-                article.get('link'),
+                article_id,
             ),
         )
 
@@ -218,42 +234,35 @@ class SentimentService(metaclass=SingletonMeta):
                              and validation flags indicating parsing success.
                         
         """
-        format_match = False
+        if not self._response_matches_format(response):
+            return False
+        sentiments, tickers = self._parse_response(response)
+        if len(sentiments) != len(tickers):
+            self._logger.log_error(f"Sentiment/ticker count mismatch: {response!r}")
+            return False
+        if len(sentiments) == 1 and sentiments[0].lower()=="none":
+            return True
+        if tickers == ["NONE"]:
+            return True
+        ticker_validities = self._validate_tickers(tickers)
+        sentiment_validities = self._validate_sentiments(sentiments)
         try:
-            format_match = self._response_matches_format(response)
-            assert format_match, "Format of model response did not match."
-            sentiments: List[str] = []
-            tickers: List[str] = []
-            sentiments, tickers = self._parse_response(response)
-            assert len(sentiments) == len(tickers), "Number of sentiments not equal to number of tickers after parsing"
-            ticker_validities = self._validate_tickers(tickers)
-            sentiment_validities = self._validate_sentiments(sentiments)
-
-            for i in range(len(sentiments)):
-                sentiment = sentiments[i]
-                ticker = tickers[i]
-                ticker_valid = ticker_validities[i]
-                sentiment_valid = sentiment_validities[i]
-                if not sentiment_valid:
+            for i, (sentiment, ticker) in enumerate(zip(sentiments, tickers)):
+                if not sentiment_validities[i]:
                     sentiment = "NONE"
-                
-
-                sentiment_dict = {
+                self._db_service.insert_row_dict("sentiments", {
                     "article_id": article_id,
-                    "company": self._ticker_service.lookup_stock_name(ticker) if ticker_valid else None,
+                    "ticker": ticker,
+                    "company": self._ticker_service.lookup_stock_name(ticker) if ticker_validities[i] else None,
                     "sentiment": sentiment,
-                    "ticker_valid": ticker_valid,
+                    "ticker_valid": ticker_validities[i],
                     "ordinal": i,
                     "created_at": datetime.now(timezone.utc),
-                }
-                self._db_service.insert_row_dict("sentiments", sentiment_dict)
-                
-            
-            
-        except:
-            self._logger.log_error(f"SentimentService errored when trying to parse this response: '{response}'")
-
-        return format_match  
+                })
+        except Exception as e:
+            self._logger.log_error(f"Failed inserting sentiments for {article_id}: {e}")
+            return False
+        return True
 
     def _validate_tickers(self, tickers: List[str]) -> List[bool]:
         """
@@ -299,7 +308,10 @@ class SentimentService(metaclass=SingletonMeta):
         ticker_part = ticker_part.replace("[", "")
         ticker_part = ticker_part.replace("]", "")
 
-        return (sentiment_part.split(","), ticker_part.split(","))
+
+        sentiments = [s.strip() for s in sentiment_part.split(",") if s.strip()]
+        tickers = [t.strip().upper() for t in ticker_part.split(",") if t.strip()]
+        return (sentiments, tickers)
     
     def _response_matches_format(self, text) -> bool:
         """

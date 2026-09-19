@@ -10,7 +10,8 @@ SCRAPE_FREQUENCY = timedelta(minutes=10)
 DISPLAY_TIMEZONE_NAME = "America/New_York"
 BASE_PURCHASE_DOLLARS = 10.0
 BASE_PURCHASE_QTY = 1
-
+HEARTBEAT_PULSE_FREQUENCY_SECONDS = 60
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "14"))
 load_dotenv(
     dotenv_path=Path(__file__).resolve().parents[1] / ".env",
     override=False,

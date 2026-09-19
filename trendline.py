@@ -1,44 +1,36 @@
-from plotly import data
-from src.market_monitor import MarketMonitorService
-from src.news_scraper import NewsScrapingService
+
+from src.news_scraper import NewsScrapingService, PendingSentimentAnalysis
 from src.sentiment_service import SentimentService
-from src.base.sentiment_response import SentimentResponse
 from src.timing_service import TimingService
 from src.base.tl_logger import LoggingService
 from src.trader import StockTrader
 from src.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
-from src.trade_lifecycle_manager import TradeLifecycleManager
-from src.persistent_data_service import PersistentDataService
+from src.trade_manager import TradeManager, PendingBuy, PendingSell
 from src.configs import OLLAMA_WARMUP_ON_STARTUP
 from src.database.db_service import DatabaseService
 import atexit
 import signal
 import sys
-import time
 from alpaca.trading.enums import TimeInForce
 from alpaca.trading.models import Order
-from typing import List, Dict
-
-
+from datetime import datetime, timezone
+from src.base.heartbeat import HeartbeatService
 def _shutdown_persist() -> None:
-    PersistentDataService().save_all(reason="shutdown")
+    database_service.close()
 
 
 def _handle_stop_signal(signum, frame) -> None:
-    PersistentDataService().save_all(reason="shutdown")
     database_service.close()
     sys.exit(0)
 
 database_service = DatabaseService()
 sentiment_service = SentimentService()  # analyzes the sentiment of news headlines
 news_scraper = NewsScrapingService(skip_initial_scrape=True)  # state restored by PersistentDataService when present
-market_monitor = MarketMonitorService()  # tells you if the market is open and how long until it opens
 timing_service = TimingService()  # keeps track of the period of the app. Uses a set time from configs
 logger = LoggingService()  # for logging information
 stock_trader = StockTrader()  # used to buy and sell stocks through Alpaca-py
-trade_manager = TradeLifecycleManager()  # manages full trade lifecycle: news archival, sentiment, buy/sell order tracking, hold timing
-persistent_data = PersistentDataService()
-persistent_data.load_all()
+trade_manager = TradeManager()  # manages full trade lifecycle: news archival, sentiment, buy/sell order tracking, hold timing
+heartbeat = HeartbeatService()
 
 atexit.register(_shutdown_persist)
 if hasattr(signal, "SIGINT"):
@@ -46,8 +38,6 @@ if hasattr(signal, "SIGINT"):
 if hasattr(signal, "SIGTERM"):
     signal.signal(signal.SIGTERM, _handle_stop_signal)
 
-
-ready_to_sell_orders: List[Order] = []
 
 if OLLAMA_WARMUP_ON_STARTUP:
     logger.log_info("Warming up Ollama sentiment service (non-fatal).")
@@ -67,50 +57,46 @@ while True:
     Finally, log the order with the trade manager which archives the news entry and tracks the buy order.
     
     """
+    heartbeat.pulse()
     if timing_service.is_time_to_scrape():
+        logger.purge_old_logs()
         news_scraper.update()
-        article_tuples = news_scraper.get_new_articles()
-        logger.log_info(f"Found {len(article_tuples)} new articles.")
-        for name, entry in article_tuples:
-            if entry.get('title')=="" or entry.get('title') is None:
-                logger.log_warning(f"No headline found for article. {name} --- {entry.get('link', '')}")
+        articles: list[PendingSentimentAnalysis] = news_scraper.get_new_articles()
+        logger.log_info(f"Found {len(articles)} new articles.")
+        for article in articles:
+            heartbeat.pulse()
+            if article.title=="" or article.title is None:
+                sentiment_service.archive_no_title(article.article_id)
+                logger.log_warning(f"No headline found for article. {article.article_id}")
                 continue
             try:
-                sentiment_response: SentimentResponse = sentiment_service.analyze_sentiment(entry.get('title'), entry)
+                sentiment_service.analyze_sentiment(article.title, article.article_id)
             except Exception as e:
                 # SentimentService is intended to never raise, but guard the main loop regardless.
                 logger.log_error(f"SentimentService crashed: {type(e).__name__}: {e}")
-                sentiment_response = SentimentResponse("", "NONE", format_match=False, ticker_found=False, raw_response="")
 
-            buy_orders: Dict[str, Order] = {}
-            sell_orders: Dict[str, None] = {}
 
-            if sentiment_response.format_match and sentiment_response.ticker_found:
-                if sentiment_response.sentiment == "positive":
-                    tickers = sentiment_response.get_ticker_list()
-                    for sym in tickers:
-                        order: Order | None = stock_trader.buy(
-                            sym, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
-                        )
-                        if order is not None:
-                            buy_orders[order.symbol] = order
-                            sell_orders[order.symbol] = None
-                    if tickers:
-                        logger.log_info(
-                            f"Buys for headline: {len(buy_orders)}/{len(tickers)} filled "
-                            f"({','.join(tickers)}) — {entry.get('title', '')[:80]!r}"
-                        )
+            #get all the tickers that need to be purchased
+            pending_buys: list[PendingBuy] = trade_manager.get_pending_buys()
+            orders = []
+            for buy in pending_buys:
+                order: Order | None = stock_trader.buy(
+                    buy.ticker, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
+                )
+                orders.append(order)
+                #create buy entry in purchase table now?
+            # if rows:
+            #     logger.log_info(
+            #         f"Buys for headline: {len(buy_orders)}/{len(tickers)} filled "
+            #         f"({','.join(tickers)}) — {entry.get('title', '')[:80]!r}"
+            #     )
 
-            trade_manager.archive_news_entry(name, entry, sentiment_response, buy_orders, sell_orders)
+            trade_manager.archive_buy(pending_buys, orders)
 
         timing_service.mark_scrape_completed()
 
     else:
-        wait_time_seconds = timing_service.time_until_next_scrape()
-        formatted_wait_time = f"{int(wait_time_seconds // 60)}m {wait_time_seconds % 60:.1f}s"
-        logger.log_info(f"Sleeping until next iteration: {formatted_wait_time}")
-        time.sleep(wait_time_seconds)
-        logger.log_info(f"Woke up, proceeding with next iteration")
+        timing_service.wait_until_next_scrape()
 
 
 
@@ -128,14 +114,13 @@ while True:
     """
     trade_manager.update()
 
-    ready_to_sell_orders = trade_manager.check_ready_to_sell()
-    trade_manager.clear_ready_to_sell()
+    ready_to_sell: list[PendingSell] = trade_manager.query_ready_to_sell()
 
-    for buy_order in ready_to_sell_orders:
-        sell_order: Order = stock_trader.sell(buy_order.symbol, quantity=int(buy_order.qty), time_in_force=TimeInForce.GTC)
-        if sell_order is not None:
-            trade_manager.log_sell_order(buy_order, sell_order)
+    sell_orders = []
+    for stock in ready_to_sell:
+        sell_order: Order = stock_trader.sell(stock.ticker, quantity=stock.qty, time_in_force=TimeInForce.GTC)
+        sell_orders.append(sell_order)
 
-    persistent_data.save_all(reason="flush")
+    trade_manager.archive_sell(ready_to_sell, sell_orders)
 
 

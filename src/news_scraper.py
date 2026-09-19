@@ -13,6 +13,12 @@ from src.database.db_service import DatabaseService
 from psycopg.types.json import Jsonb
 import json
 from time import struct_time
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class PendingSentimentAnalysis:
+    article_id: str
+    title: str
 
 class NewsScrapingService(metaclass=SingletonMeta):
     def __init__(self, rss_feeds: Dict[str, str] = RSS_FEED_URLS, skip_initial_scrape: bool = False):
@@ -119,7 +125,7 @@ class NewsScrapingService(metaclass=SingletonMeta):
             self._logger.log_error(f"RSS scrape failed for {rss_url} with error {e}")
             return None
     
-    def get_new_articles(self) -> List[Tuple[str, FeedParserDict]]:
+    def get_new_articles(self) -> list[PendingSentimentAnalysis]:
         """
         Retrieve unserved articles and automatically mark them as served.
         
@@ -157,10 +163,22 @@ class NewsScrapingService(metaclass=SingletonMeta):
             self._archive_article(source_name, entry)
         
         # Return without article_id (just source_name and entry)
-        return [(source_name, entry) for source_name, entry, article_id in unserved]
+        return self._get_unserved_articles()
+
+    def _get_unserved_articles(self) -> list[PendingSentimentAnalysis]:
+        rows = self.db_service.fetch_all(
+            """
+            SELECT article_id, title FROM articles
+            WHERE sentiment_analyzed_at IS NULL
+            """)
+        return [PendingSentimentAnalysis(row[0], row[1]) for row in rows]
 
     def _get_served_article_ids(self) -> List[str]:
-        rows = self.db_service.fetch_all("SELECT article_id FROM articles")
+        rows = self.db_service.fetch_all(
+            """
+            SELECT article_id FROM articles
+            WHERE sentiment_analyzed_at IS NOT NULL
+            """)
         return [row[0] for row in rows]
 
     def _archive_article(self, source: str, article: FeedParserDict):

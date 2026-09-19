@@ -7,10 +7,12 @@ across the application.
 """
 
 from src.base.singleton import SingletonMeta
-from src.configs import SCRAPE_FREQUENCY
+from src.configs import SCRAPE_FREQUENCY, HEARTBEAT_PULSE_FREQUENCY_SECONDS
 from datetime import datetime, timedelta
 from typing import Optional
-
+from src.base.tl_logger import LoggingService
+import time
+from src.base.heartbeat import HeartbeatService
 
 class TimingService(metaclass=SingletonMeta):
     """
@@ -48,6 +50,8 @@ class TimingService(metaclass=SingletonMeta):
         self._last_scrape_time: Optional[datetime] = None
         self._scrape_frequency: timedelta = scrape_frequency
         self._next_scrape_time: Optional[datetime] = None
+        self._logger = LoggingService()
+        self._heartbeat = HeartbeatService()
     
     def is_time_to_scrape(self) -> bool:
         """
@@ -164,3 +168,19 @@ class TimingService(metaclass=SingletonMeta):
         # Recalculate next scrape time if we have a last scrape time
         if self._last_scrape_time is not None:
             self._next_scrape_time = self._last_scrape_time + self._scrape_frequency
+
+    def wait_until_next_scrape(self):
+        """
+        Sleep until the next scraping iteration
+        """
+        wait_time_seconds = self.time_until_next_scrape()
+        formatted_wait_time = f"{int(wait_time_seconds // 60)}m {wait_time_seconds % 60:.1f}s"
+        self._logger.log_info(f"Waiting until next iteration: {formatted_wait_time}")
+        while True:
+            remaining = self.time_until_next_scrape()
+            if remaining <= 0:
+                break
+            self._heartbeat.pulse()
+            time.sleep(min(HEARTBEAT_PULSE_FREQUENCY_SECONDS, remaining))
+
+        self._logger.log_info(f"Woke up, proceeding with next iteration")
