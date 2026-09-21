@@ -493,7 +493,7 @@ Script: `scripts/migrate_pickle_to_postgres.py`
 5. For each archived entry (prefer archived over served-only stubs):
    - INSERT `articles` with projected fields + `raw_entry` JSON from feedparser entry
    - `sentiment_analyzed_at` = `archived_at` (already analyzed)
-   - Copy `sentiment_raw_response` / `sentiment_format_match` from `SentimentResponse`
+   - Copy `sentiment_raw_response` / `sentiment_format_match` from the pickled sentiment object
    - Split `ticker` on commas → N `sentiments` rows; same `sentiment` string on each; `ordinal` = index; `company` via `TickerService().lookup_stock_name(sym)` when possible; `ticker_validated` = symbol in validated set / appears in `buy_orders`
    - For each buy in `buy_orders`: INSERT `buy_orders` with mapped columns + `sentiment_id` lookup by `(article_id, symbol)`; `is_terminal` from `buy_order_terminal[sym]`
    - For each non-None sell: INSERT `sell_orders` with `buy_order_id` FK; `is_terminal` from `sell_order_terminal[sym]`

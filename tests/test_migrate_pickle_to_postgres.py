@@ -150,7 +150,7 @@ def _postgres_available() -> bool:
         from dotenv import load_dotenv
 
         load_dotenv(_ROOT / ".env", override=False)
-        from src.configs import (
+        from src.lib.configs import (
             POSTGRES_DB,
             POSTGRES_HOST,
             POSTGRES_PASSWORD,

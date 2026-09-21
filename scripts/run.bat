@@ -13,10 +13,10 @@ echo Streamlit + ngrok will use port: %PORT%
 echo Basic auth: trendline / 1234water
 echo.
 
-start "TrendLine Backend" /D "%ROOT%" cmd /k "call .venv\Scripts\activate.bat && python trendline.py"
+start "TrendLine Backend" /D "%ROOT%" cmd /k "call .venv\Scripts\activate.bat && python src\trendline\trendline.py"
 timeout /t 2 /nobreak >nul
 
-start "TrendLine Streamlit" /D "%ROOT%" cmd /k "call .venv\Scripts\activate.bat && streamlit run trendline_streamlit.py --server.port %PORT%"
+start "TrendLine Streamlit" /D "%ROOT%" cmd /k "call .venv\Scripts\activate.bat && streamlit run src\streamlit-dash\trendline_streamlit.py --server.port %PORT%"
 timeout /t 3 /nobreak >nul
 
 start "TrendLine ngrok" cmd /k ngrok http %PORT% --basic-auth=trendline:1234water

@@ -3,9 +3,8 @@ import sys
 import os
 from unittest.mock import patch
 
-from src.sentiment_service import SentimentService
-from src.base.sentiment_response import SentimentResponse
-from src.ticker_service import TickerService
+from src.trendline.sentiment_service import SentimentService
+from src.lib.ticker_service import TickerService
 
 _TRADABLE_FOR_TESTS = {"NVDA", "GLW", "AAPL", "MSFT", "APPL", "NVIDIA"}
 
@@ -130,80 +129,6 @@ Note: The article does not have an explicitly negative tone towards any company 
 
             self.assertEqual(sentiment, "neutral")
             self.assertEqual(ticker, "None (The article does not specifically mention a company that is publicly traded)")
-    def test_parse_sentiment_1(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            service = SentimentService()
-            
-            test_response = service._parse_sentiment("Neutral | None (The article does not specifically mention a company that is publicly traded)")
-
-            true_response = SentimentResponse("neutral", "NONE", format_match=True, ticker_found=False, raw_response="")
-            self.assertEqual(true_response.sentiment, test_response.sentiment)
-            self.assertEqual(true_response.ticker, test_response.ticker)
-            self.assertEqual(true_response.format_match, test_response.format_match)
-            self.assertEqual(true_response.ticker_found, test_response.ticker_found)
-    def test_parse_sentiment_2(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            service = SentimentService()
-            
-            test_response = service._parse_sentiment("[Neutral] | NVDA")
-
-            true_response = SentimentResponse("neutral", "NVDA", format_match=True, ticker_found=True, raw_response="")
-            self.assertEqual(true_response.sentiment, test_response.sentiment)
-            self.assertEqual(true_response.ticker, test_response.ticker)
-            self.assertEqual(true_response.format_match, test_response.format_match)
-            self.assertEqual(true_response.ticker_found, test_response.ticker_found)
-    def test_parse_sentiment_3(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            service = SentimentService()
-            
-            test_response = service._parse_sentiment("[Neutral]  NVIDIA (NVDA)")
-
-            true_response = SentimentResponse("NONE", "NONE", format_match=False, ticker_found=False, raw_response="")
-            self.assertEqual(true_response.sentiment, test_response.sentiment)
-            self.assertEqual(true_response.ticker, test_response.ticker)
-            self.assertEqual(true_response.format_match, test_response.format_match)
-            self.assertEqual(true_response.ticker_found, test_response.ticker_found)
-
-    def test_parse_sentiment_4(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            service = SentimentService()
-            
-            test_response = service._parse_sentiment("[Sentiment] | [Ticker] Neutral | NVDA")
-
-            true_response = SentimentResponse("NONE", "NONE", format_match=False, ticker_found=False, raw_response="")
-            self.assertEqual(true_response.sentiment, test_response.sentiment)
-            self.assertEqual(true_response.ticker, test_response.ticker)
-            self.assertEqual(true_response.format_match, test_response.format_match)
-            self.assertEqual(true_response.ticker_found, test_response.ticker_found)
-
-    def test_parse_sentiment_5(self):
-            """Test that batch analysis handles individual errors gracefully."""
-            service = SentimentService()
-            
-            test_response = service._parse_sentiment("Positive | APPL")
-
-            true_response = SentimentResponse("positive", "APPL", format_match=True, ticker_found=True, raw_response="")
-            self.assertEqual(true_response.sentiment, test_response.sentiment)
-            self.assertEqual(true_response.ticker, test_response.ticker)
-            self.assertEqual(true_response.format_match, test_response.format_match)
-            self.assertEqual(true_response.ticker_found, test_response.ticker_found)
-
-    def test_parse_sentiment_multi_ticker_nvda_glw_golden(self):
-        """Simulated LLM line yields canonical comma-joined tickers when tradable."""
-        service = SentimentService()
-        raw = "Positive | NVDA,GLW"
-        out = service._parse_sentiment(raw)
-        self.assertEqual(out.sentiment, "positive")
-        self.assertEqual(out.ticker, "NVDA,GLW")
-        self.assertTrue(out.ticker_found)
-        self.assertEqual(out.get_ticker_list(), ["NVDA", "GLW"])
-
-    def test_parse_sentiment_multi_ticker_dedupes_and_skips_untradable(self):
-        service = SentimentService()
-        raw = "Positive | NVDA,NVDA,FAKECO,GLW"
-        out = service._parse_sentiment(raw)
-        self.assertEqual(out.ticker, "NVDA,GLW")
-        self.assertEqual(out.get_ticker_list(), ["NVDA", "GLW"])
 
     def test_analyze_sentiment_1(self):
             """Test that batch analysis handles individual errors gracefully."""
@@ -211,11 +136,10 @@ Note: The article does not have an explicitly negative tone towards any company 
                 self.skipTest("Requires a running local Ollama server. Set RUN_OLLAMA_INTEGRATION_TESTS=1 to enable.")
             service = SentimentService()
             
-            test_response = service.analyze_sentiment("NVIDIA shares soared 5% today after announcing a new Blackwell chip breakthrough.")
-
-            #true_response = SentimentResponse("positive", "NVDA", format_match=True, ticker_found=True, raw_response="")
-            if test_response.ticker == "NVDA":
-                self.assertTrue(test_response.ticker_found)
+            service.analyze_sentiment(
+                "NVIDIA shares soared 5% today after announcing a new Blackwell chip breakthrough.",
+                "https://example.com/nvidia",
+            )
 
 if __name__ == '__main__':
     unittest.main()

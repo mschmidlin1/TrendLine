@@ -1,6 +1,6 @@
 import unittest
-from src.news_scraper import NewsScrapingService
-from src.converters import feedparser_to_df
+from src.trendline.news_service import NewsScrapingService
+from src.lib.converters import feedparser_to_df
 
 
 class TestNewsScraper(unittest.TestCase):

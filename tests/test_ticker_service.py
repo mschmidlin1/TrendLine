@@ -1,8 +1,8 @@
 import unittest
 import sys
 import os
-from src.ticker_service import TickerService
-from src.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
+from src.lib.ticker_service import TickerService
+from src.lib.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
 # Add src directory to path
 from alpaca.data.models.quotes import Quote
 

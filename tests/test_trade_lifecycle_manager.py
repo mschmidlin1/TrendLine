@@ -3,11 +3,12 @@ from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from src.trade_lifecycle_manager import TradeLifecycleManager
-from src.base.sentiment_response import SentimentResponse
+from types import SimpleNamespace
+
+from src.trendline.trade_lifecycle_manager import TradeLifecycleManager
 from alpaca.trading.models import Order
 from alpaca.trading.enums import OrderStatus
-from src.configs import MARKET_HOLD_TIME
+from src.lib.configs import MARKET_HOLD_TIME
 
 
 def _make_article_entry(link="https://example.com/article/123", title="Test Article",
@@ -26,8 +27,7 @@ def _make_article_entry(link="https://example.com/article/123", title="Test Arti
 def _make_sentiment_response(sentiment="positive", ticker="NVDA",
                               format_match=True, ticker_found=True,
                               raw_response="Positive | NVDA"):
-    """Helper to create a SentimentResponse."""
-    return SentimentResponse(
+    return SimpleNamespace(
         sentiment=sentiment,
         ticker=ticker,
         format_match=format_match,

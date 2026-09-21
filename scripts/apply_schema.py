@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))  # so "import src..." works when run as a script
 
 load_dotenv(ROOT / ".env", override=False)
 
-from src.configs import (  # noqa: E402
+from src.lib.configs import (  # noqa: E402
     POSTGRES_DB,
     POSTGRES_HOST,
     POSTGRES_PASSWORD,

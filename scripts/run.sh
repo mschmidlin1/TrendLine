@@ -87,10 +87,10 @@ run_fallback_background() {
   mkdir -p "$ROOT/logs"
   # shellcheck source=/dev/null
   source "$VENV_ACTIVATE"
-  python trendline.py >>"$ROOT/logs/trendline_backend.log" 2>&1 &
+  python src/trendline/trendline.py >>"$ROOT/logs/trendline_backend.log" 2>&1 &
   echo $! >"$ROOT/.trendline_backend.pid"
   sleep 2
-  streamlit run trendline_streamlit.py --server.port "$TRENDLINE_PORT" >>"$ROOT/logs/trendline_streamlit.log" 2>&1 &
+  streamlit run src/streamlit-dash/trendline_streamlit.py --server.port "$TRENDLINE_PORT" >>"$ROOT/logs/trendline_streamlit.log" 2>&1 &
   echo $! >"$ROOT/.trendline_streamlit.pid"
   sleep 3
   ngrok http "$TRENDLINE_PORT" --basic-auth=trendline:1234water >>"$ROOT/logs/trendline_ngrok.log" 2>&1 &
@@ -98,8 +98,8 @@ run_fallback_background() {
   echo "Logs: logs/trendline_backend.log, logs/trendline_streamlit.log, logs/trendline_ngrok.log"
 }
 
-INNER_BACKEND="$(wrap_py_service backend "python trendline.py")"
-INNER_STREAMLIT="$(wrap_py_service streamlit "streamlit run trendline_streamlit.py --server.port ${TRENDLINE_PORT}")"
+INNER_BACKEND="$(wrap_py_service backend "python src/trendline/trendline.py")"
+INNER_STREAMLIT="$(wrap_py_service streamlit "streamlit run src/streamlit-dash/trendline_streamlit.py --server.port ${TRENDLINE_PORT}")"
 INNER_NGROK="$(wrap_ngrok)"
 
 if gui_terminal_available; then

@@ -19,11 +19,14 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
 
-from src.base.datetime_utils import ensure_utc  # noqa: E402
-from src.snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
+from src.lib.base.datetime_utils import ensure_utc  # noqa: E402
+from snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
 
 ENVELOPE_VERSION = 1
 TERMINAL_STATUS_VALUES = frozenset({"filled", "canceled", "expired", "rejected"})
@@ -57,7 +60,7 @@ def load_snapshot(path: Path) -> object:
 
 
 def tickers_from_pickle(sr: Any) -> list[str]:
-    """Split pickled SentimentResponse.ticker (comma-joined) or .tickers list."""
+    """Split a pickled sentiment ticker field (comma-joined) or tickers list."""
     raw = getattr(sr, "ticker", None)
     if raw is None:
         raw = getattr(sr, "tickers", None)
@@ -240,7 +243,7 @@ class TickerEnricher:
             return None, has_buy
         try:
             if self._svc is None:
-                from src.ticker_service import TickerService
+                from src.lib.ticker_service import TickerService
 
                 self._svc = TickerService()
             valid = bool(self._svc.is_tradable_stock_symbol(ticker))
@@ -303,7 +306,7 @@ def postgres_conninfo() -> str:
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env", override=False)
-    from src.configs import (
+    from src.lib.configs import (
         POSTGRES_DB,
         POSTGRES_HOST,
         POSTGRES_PASSWORD,
@@ -462,7 +465,7 @@ def run_migration(
         return counts
 
     import psycopg
-    from src.configs import RSS_FEED_URLS
+    from src.lib.configs import RSS_FEED_URLS
 
     enricher = TickerEnricher() if ticker_lookup is None else None
     lookup = ticker_lookup if ticker_lookup is not None else enricher.lookup

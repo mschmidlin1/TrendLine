@@ -29,7 +29,7 @@ pkill -f "ngrok http.*trendline:1234water" 2>/dev/null || true
 
 # Streamlit child processes if the saved parent PID was insufficient
 if [[ -n "$SAVED_PORT" ]]; then
-  pkill -f "streamlit run trendline_streamlit.py --server.port ${SAVED_PORT}" 2>/dev/null || true
+  pkill -f "streamlit run src/streamlit-dash/trendline_streamlit.py --server.port ${SAVED_PORT}" 2>/dev/null || true
 fi
 
 rm -f "$PORT_FILE"

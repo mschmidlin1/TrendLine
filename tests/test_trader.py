@@ -1,13 +1,13 @@
 import unittest
 import sys
 import os
-from src.trader import StockTrader
-from src.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
+from src.lib.trader import StockTrader
+from src.lib.configs import ALPACA_API_ID_PAPER, ALPACA_SECRET_KEY_PAPER
 # Add src directory to path
 from alpaca.data.models.quotes import Quote
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
-from src.base.alpaca_client import AlpacaClient
-from src.converters import orders_to_dataframe
+from src.lib.base.alpaca_client import AlpacaClient
+from src.lib.converters import orders_to_dataframe
 
 class TestTrader(unittest.TestCase):
     """Unit tests for SentimentService class."""
