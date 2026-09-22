@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# streamlit run adds this file's directory to sys.path, not the repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import streamlit as st
 from front_end.equity_plot import render_equity_plot
 from front_end.positions_table import render_positions_table
@@ -8,7 +16,6 @@ from front_end.log_viewer import render_log_viewer
 from front_end.about_tab import render_about_doc
 from front_end.power_display import render_power_display
 import base64
-from pathlib import Path
 
 def main() -> None:
     st.set_page_config(page_title="TrendLine Dashboard", layout="wide")
@@ -29,7 +36,7 @@ def main() -> None:
     unsafe_allow_html=True,
 )
     #region Header
-    path = Path("resources/logo_small.png")
+    path = _REPO_ROOT / "resources" / "logo_small.png"
     b64 = base64.b64encode(path.read_bytes()).decode()
     mime = "image/png"  # use "image/jpeg" for .jpg
     st.markdown(

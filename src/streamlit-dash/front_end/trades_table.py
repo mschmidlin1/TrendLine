@@ -22,9 +22,7 @@ from front_end.charts import (
 )
 from front_end.charts.daily_pct_vs_vti import DAILY_PCT_VTI_CHART_SESSION_KEY
 from front_end.charts.daily_pct_vs_vti_one_month import DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY
-from front_end.trade_snapshot_loader import load_trade_lifecycle_from_disk
-from src.trendline.trade_lifecycle_manager import TradeLifecycleManager
-from src.lib.ticker_service import TickerService
+from front_end.news_trades import load_news_trades_dataframe
 from src.lib.trader import StockTrader
 from src.lib.configs import DISPLAY_TIMEZONE_NAME
 from src.lib.base.datetime_utils import convert_series_to_display_tz
@@ -209,14 +207,13 @@ def render_trades_table() -> None:
     st.subheader("News Trades")
     if "news_table" not in st.session_state:
         with st.spinner("Getting news trade data...", show_time=True):
-            manager: TradeLifecycleManager = load_trade_lifecycle_from_disk()
-            if manager is None:
-                st.warning("No trade snapshot found on disk yet (persistent_data/trade_lifecycle.snapshot).")
+            try:
+                df = load_news_trades_dataframe()
+            except Exception:
+                st.warning("Trade history could not be loaded from Postgres.")
                 return
-
-            df = manager.to_dataframe()
             if df.empty:
-                st.warning("Trade snapshot is present but contains no entries.")
+                st.warning("Trade history could not be loaded from Postgres.")
                 return
 
             df = _compute_derived_metrics(df)
@@ -225,18 +222,7 @@ def render_trades_table() -> None:
                 if col in df.columns:
                     df[col] = convert_series_to_display_tz(df[col], tz)
             df = df.sort_values("archived_at", ascending=False, na_position="last")
-
-            ticker_service = TickerService()
-
-            def _company_cell(t: object) -> str | None:
-                if t is None or (isinstance(t, float) and pd.isna(t)):
-                    return None
-                s = str(t).strip()
-                if not s:
-                    return None
-                return ticker_service.lookup_stock_name(s)
-
-            df["Company"] = df["ticker"].apply(_company_cell)
+            df["Company"] = df["company"]
             df = df.rename(columns={
                 "pnl": "Total Gain",
                 "pnl_pct": "Total Gain %",

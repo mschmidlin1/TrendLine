@@ -102,8 +102,9 @@ def render_log_viewer() -> None:
 
     if "log_df" not in st.session_state or "grid_options" not in st.session_state:
         with st.spinner("Getting Log data...", show_time=True):
-            log_path = Path("logs") / "logs.txt"
-            lock_path = Path("logs") / "logs.txt.lock"
+            log_dir = Path(__file__).resolve().parents[3] / "logs"
+            log_path = log_dir / "logs.txt"
+            lock_path = log_dir / "logs.txt.lock"
             lines = _read_log_lines(log_path, lock_path)
 
             if not lines:
