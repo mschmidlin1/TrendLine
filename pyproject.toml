@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trend-core"  # Name used in pip / distribution
+version = "0.1.0"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["trend_core*"]  # Matches src/trend_core/ directory
