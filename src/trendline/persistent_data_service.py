@@ -11,11 +11,11 @@ from typing import Literal, Optional, Union
 
 from filelock import FileLock
 
-from src.lib.base.singleton import SingletonMeta
-from src.lib.base.tl_logger import LoggingService
-from src.lib.configs import PERSISTENT_DATA_DIR
-from src.trendline.news_service import NewsScrapingService
-from src.trendline.trade_lifecycle_manager import TradeLifecycleManager
+from trend_core.base.singleton import SingletonMeta
+from trend_core.base.tl_logger import LoggingService
+from trend_core.configs import PERSISTENT_DATA_DIR
+from news_service import NewsScrapingService
+from trade_lifecycle_manager import TradeLifecycleManager
 
 EnvelopeVersion = 1
 SaveReason = Literal["flush", "shutdown"]

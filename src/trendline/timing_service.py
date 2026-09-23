@@ -6,13 +6,13 @@ time intervals. It follows the Singleton pattern to ensure consistent timing
 across the application.
 """
 
-from src.lib.base.singleton import SingletonMeta
-from src.lib.configs import SCRAPE_FREQUENCY, HEARTBEAT_PULSE_FREQUENCY_SECONDS
+from trend_core.base.singleton import SingletonMeta
+from trend_core.configs import SCRAPE_FREQUENCY, HEARTBEAT_PULSE_FREQUENCY_SECONDS
 from datetime import datetime, timedelta
 from typing import Optional
-from src.lib.base.tl_logger import LoggingService
+from trend_core.base.tl_logger import LoggingService
 import time
-from src.trendline.heartbeat_service import HeartbeatService
+from heartbeat_service import HeartbeatService
 
 class TimingService(metaclass=SingletonMeta):
     """

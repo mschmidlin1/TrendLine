@@ -1,13 +1,5 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# streamlit run adds this file's directory to sys.path, not the repo root.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
 import streamlit as st
 from front_end.equity_plot import render_equity_plot
 from front_end.positions_table import render_positions_table

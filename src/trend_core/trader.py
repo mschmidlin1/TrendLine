@@ -16,13 +16,13 @@ from datetime import datetime
 from typing import Optional, Dict, List
 from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
-from src.lib.configs import ALPACA_CHOSEN_SECRET_KEY
-from src.lib.base.tl_logger import LoggingService
-from src.lib.base.singleton import SingletonMeta
-from src.lib.base.alpaca_client import AlpacaClient
-from src.lib.ticker_service import TickerService
-from src.lib.converters import orders_to_dataframe
-from src.lib.account_service import AccountService
+from trend_core.configs import ALPACA_CHOSEN_SECRET_KEY
+from trend_core.base.tl_logger import LoggingService
+from trend_core.base.singleton import SingletonMeta
+from trend_core.base.alpaca_client import AlpacaClient
+from trend_core.ticker_service import TickerService
+from trend_core.converters import orders_to_dataframe
+from trend_core.account_service import AccountService
 
 class Trader():
     """

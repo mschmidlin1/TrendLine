@@ -1,20 +1,20 @@
 
-from src.trendline.news_service import NewsScrapingService, PendingSentimentAnalysis
-from src.trendline.sentiment_service import SentimentService
-from src.trendline.timing_service import TimingService
-from src.lib.base.tl_logger import LoggingService
-from src.lib.trader import StockTrader
-from src.lib.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
-from src.trendline.trade_manager import TradeManager, PendingBuy, PendingSell
-from src.lib.configs import OLLAMA_WARMUP_ON_STARTUP
-from src.lib.database.db_service import DatabaseService
+from news_service import NewsScrapingService, PendingSentimentAnalysis
+from sentiment_service import SentimentService
+from timing_service import TimingService
+from trend_core.base.tl_logger import LoggingService
+from trend_core.trader import StockTrader
+from trend_core.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
+from trade_manager import TradeManager, PendingBuy, PendingSell
+from trend_core.configs import OLLAMA_WARMUP_ON_STARTUP
+from trend_core.database.db_service import DatabaseService
 import atexit
 import signal
 import sys
 from alpaca.trading.enums import TimeInForce
 from alpaca.trading.models import Order
 from datetime import datetime, timezone
-from src.trendline.heartbeat_service import HeartbeatService
+from heartbeat_service import HeartbeatService
 def _shutdown_persist() -> None:
     database_service.close()
 

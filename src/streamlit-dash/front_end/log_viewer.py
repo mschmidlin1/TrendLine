@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import streamlit as st
 from filelock import FileLock
-from src.lib.configs import LOG_VIEWER_MAX_LINES
+from trend_core.configs import LOG_VIEWER_MAX_LINES
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 

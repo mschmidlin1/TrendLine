@@ -1,5 +1,9 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.11"
+  "pythonVersion": "3.11",
+  "executionEnvironments": [
+    { "root": "src/trendline" },
+    { "root": "src/streamlit-dash" }
+  ]
 }

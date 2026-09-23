@@ -6,9 +6,9 @@ import pandas as pd
 import streamlit as st
 
 from alpaca.trading.models import Position
-from src.lib.account_service import AccountService
-from src.lib.converters import positions_to_dataframe
-from src.lib.ticker_service import TickerService
+from trend_core.account_service import AccountService
+from trend_core.converters import positions_to_dataframe
+from trend_core.ticker_service import TickerService
 
 ticker_service = TickerService()
 

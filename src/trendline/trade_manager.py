@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
-from src.lib.base.singleton import SingletonMeta
-from src.lib.base.tl_logger import LoggingService
-from src.lib.base.alpaca_client import AlpacaClient
-from src.lib.configs import MARKET_HOLD_TIME
-from src.lib.base.datetime_utils import ensure_utc, naive_local_to_utc
-from src.lib.database.db_service import DatabaseService
+from trend_core.base.singleton import SingletonMeta
+from trend_core.base.tl_logger import LoggingService
+from trend_core.base.alpaca_client import AlpacaClient
+from trend_core.configs import MARKET_HOLD_TIME
+from trend_core.base.datetime_utils import ensure_utc, naive_local_to_utc
+from trend_core.database.db_service import DatabaseService
 from alpaca.trading.client import TradingClient
 from alpaca.trading.models import Order
 from alpaca.trading.enums import OrderStatus

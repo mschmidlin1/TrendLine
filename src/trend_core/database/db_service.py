@@ -1,18 +1,18 @@
 from psycopg.rows import TupleRow
-from src.lib.base.singleton import SingletonMeta
+from trend_core.base.singleton import SingletonMeta
 from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional, Sequence
 import psycopg
 from psycopg import sql
 
-from src.lib.configs import (
+from trend_core.configs import (
     POSTGRES_DB,
     POSTGRES_HOST,
     POSTGRES_PASSWORD,
     POSTGRES_PORT,
     POSTGRES_USER,
 )
-from src.lib.configs import RSS_FEED_URLS
+from trend_core.configs import RSS_FEED_URLS
 
 
 class DatabaseService(metaclass=SingletonMeta):

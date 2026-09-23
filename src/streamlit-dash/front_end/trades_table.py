@@ -23,9 +23,9 @@ from front_end.charts import (
 from front_end.charts.daily_pct_vs_vti import DAILY_PCT_VTI_CHART_SESSION_KEY
 from front_end.charts.daily_pct_vs_vti_one_month import DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY
 from front_end.news_trades import load_news_trades_dataframe
-from src.lib.trader import StockTrader
-from src.lib.configs import DISPLAY_TIMEZONE_NAME
-from src.lib.base.datetime_utils import convert_series_to_display_tz
+from trend_core.trader import StockTrader
+from trend_core.configs import DISPLAY_TIMEZONE_NAME
+from trend_core.base.datetime_utils import convert_series_to_display_tz
 
 _NEWS_TIME_PRESET_LABELS = ["1D", "1W", "1M", "3M", "YTD", "1Y", "ALL"]
 

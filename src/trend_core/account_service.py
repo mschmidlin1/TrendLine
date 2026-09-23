@@ -1,7 +1,7 @@
 from alpaca.data import Trade
-from src.lib.base.singleton import SingletonMeta
+from trend_core.base.singleton import SingletonMeta
 from alpaca.trading.requests import GetPortfolioHistoryRequest
-from src.lib.base.alpaca_client import AlpacaClient
+from trend_core.base.alpaca_client import AlpacaClient
 from alpaca.trading.client import TradingClient
 from datetime import datetime
 from alpaca.trading.models import Order, Position, TradeAccount

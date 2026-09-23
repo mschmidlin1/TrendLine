@@ -1,6 +1,6 @@
-from src.lib.base.singleton import SingletonMeta
-from src.lib.base.tl_logger import LoggingService
-from src.lib.base.alpaca_client import AlpacaClient
+from trend_core.base.singleton import SingletonMeta
+from trend_core.base.tl_logger import LoggingService
+from trend_core.base.alpaca_client import AlpacaClient
 import datetime
 import pytz
     

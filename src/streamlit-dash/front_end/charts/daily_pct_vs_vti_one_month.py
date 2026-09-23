@@ -12,9 +12,9 @@ import streamlit as st
 from alpaca.common.exceptions import APIError
 from zoneinfo import ZoneInfo
 
-from src.lib.configs import DISPLAY_TIMEZONE_NAME
+from trend_core.configs import DISPLAY_TIMEZONE_NAME
 from front_end.charts.net_trades_by_sell_day import colors_for_net_counts
-from src.lib.trader import StockTrader
+from trend_core.trader import StockTrader
 
 DAILY_PCT_VTI_ONE_MONTH_CHART_SESSION_KEY = "daily_pct_vs_vti_one_month_chart_prepared"
 

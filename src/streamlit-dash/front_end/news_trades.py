@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 import pandas as pd
 
-from src.lib.database.db_service import DatabaseService
+from trend_core.database.db_service import DatabaseService
 
 NEWS_TRADE_COLUMNS: tuple[str, ...] = (
     "article_id",

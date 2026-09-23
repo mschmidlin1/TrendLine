@@ -1,6 +1,6 @@
-from src.lib.base.singleton import SingletonMeta
+from trend_core.base.singleton import SingletonMeta
 from alpaca.trading.client import TradingClient
-from src.lib.configs import ALPACA_CHOSEN_API_ID, ALPACA_CHOSEN_SECRET_KEY, USE_PAPER
+from trend_core.configs import ALPACA_CHOSEN_API_ID, ALPACA_CHOSEN_SECRET_KEY, USE_PAPER
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 

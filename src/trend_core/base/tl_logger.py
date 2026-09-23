@@ -4,9 +4,9 @@ import sys
 
 from filelock import FileLock
 from datetime import datetime, timezone
-from src.lib.configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH, LOG_RETENTION_DAYS
-from src.lib.base.singleton import SingletonMeta
-from src.lib.database.db_service import DatabaseService
+from trend_core.configs import FILE_LOG_LEVEL, STDOUT_LOG_LEVEL, LOG_FILE, LOG_PATH, LOG_RETENTION_DAYS
+from trend_core.base.singleton import SingletonMeta
+from trend_core.database.db_service import DatabaseService
 
 class LockingFileHandler(logging.FileHandler):
     """

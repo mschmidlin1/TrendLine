@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from src.lib.configs import DISPLAY_TIMEZONE_NAME, MARKET_HOLD_TIME
+from trend_core.configs import DISPLAY_TIMEZONE_NAME, MARKET_HOLD_TIME
 
 COL_ARTICLE: Final = "Date (ET)"
 COL_BUY: Final = "Purchased Date (ET)"

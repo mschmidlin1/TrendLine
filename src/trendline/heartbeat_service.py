@@ -1,6 +1,6 @@
-from src.lib.base.singleton import SingletonMeta
-from src.lib.database.db_service import DatabaseService
-from src.lib.base.tl_logger import LoggingService
+from trend_core.base.singleton import SingletonMeta
+from trend_core.database.db_service import DatabaseService
+from trend_core.base.tl_logger import LoggingService
 
 class HeartbeatService(metaclass=SingletonMeta):
     def __init__(self):

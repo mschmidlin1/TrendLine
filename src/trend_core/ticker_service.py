@@ -1,5 +1,5 @@
-from src.lib.base.singleton import SingletonMeta
-from src.lib.base.alpaca_client import AlpacaClient
+from trend_core.base.singleton import SingletonMeta
+from trend_core.base.alpaca_client import AlpacaClient
 from alpaca.trading.requests import GetAssetsRequest
 from alpaca.trading.enums import AssetStatus
 from alpaca.trading.models import Asset

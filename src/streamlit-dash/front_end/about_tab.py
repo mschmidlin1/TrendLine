@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import streamlit as st
 
-from src.lib.configs import BASE_PURCHASE_QTY, MARKET_HOLD_TIME, SCRAPE_FREQUENCY, RSS_FEED_URLS
+from trend_core.configs import BASE_PURCHASE_QTY, MARKET_HOLD_TIME, SCRAPE_FREQUENCY, RSS_FEED_URLS
 
 
 

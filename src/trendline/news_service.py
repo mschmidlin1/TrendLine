@@ -3,13 +3,13 @@ import numpy as np
 import datetime
 from datetime import datetime, timezone
 import os
-from src.lib.configs import RSS_FEED_URLS
-from src.lib.base.singleton import SingletonMeta
+from trend_core.configs import RSS_FEED_URLS
+from trend_core.base.singleton import SingletonMeta
 import feedparser
 from typing import List, Dict, Tuple, Any
-from src.lib.base.tl_logger import LoggingService
+from trend_core.base.tl_logger import LoggingService
 from feedparser.util import FeedParserDict
-from src.lib.database.db_service import DatabaseService
+from trend_core.database.db_service import DatabaseService
 from psycopg.types.json import Jsonb
 import json
 from time import struct_time

@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from zoneinfo import ZoneInfo
 
-from src.lib.configs import DISPLAY_TIMEZONE_NAME
+from trend_core.configs import DISPLAY_TIMEZONE_NAME
 from front_end.charts.net_trades_by_sell_day import (
     colors_for_net_counts,
     net_scores_per_day,

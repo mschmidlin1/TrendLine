@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Dict, Tuple, List
-from src.lib.account_service import AccountService
+from trend_core.account_service import AccountService
 from alpaca.trading.models import PortfolioHistory
 import pandas as pd
 import plotly.graph_objects as go

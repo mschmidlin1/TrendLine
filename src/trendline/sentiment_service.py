@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
-from src.lib.base.singleton import SingletonMeta
+from trend_core.base.singleton import SingletonMeta
 from feedparser.util import FeedParserDict
-from src.trendline.timer import Timer
-from src.lib.database.db_service import DatabaseService
+from timer import Timer
+from trend_core.database.db_service import DatabaseService
 import re
 from typing import Tuple, List, Optional, TYPE_CHECKING
 import time
-from src.lib.base.tl_logger import LoggingService
-from src.lib.ticker_service import TickerService
-from src.lib.configs import (
+from trend_core.base.tl_logger import LoggingService
+from trend_core.ticker_service import TickerService
+from trend_core.configs import (
     OLLAMA_MODEL,
     OLLAMA_MAX_ATTEMPTS,
     OLLAMA_RETRY_BACKOFF_SECONDS,
