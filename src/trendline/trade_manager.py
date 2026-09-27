@@ -111,11 +111,11 @@ class TradeManager(metaclass=SingletonMeta):
             """
             UPDATE articles
             SET resulted_in_purchase = %s
-            WHERE article_id IN %s
+            WHERE article_id = ANY(%s)
             """,
             (
                 True,
-                tuple(unique_article_ids)
+                list(unique_article_ids)
             ),
         )
 

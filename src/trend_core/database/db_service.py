@@ -98,17 +98,17 @@ class DatabaseService(metaclass=SingletonMeta):
         values = list(row.values())
         return self.insert_row(table, columns, values, returning)
     
-    def init_news_sources_table(self) -> None:
+    # def init_news_sources_table(self) -> None:
 
-        query = sql.SQL("""INSERT INTO news_sources (name, url)
-        VALUES (%s, %s)
-        ON CONFLICT (url) DO UPDATE
-        SET name = EXCLUDED.name, updated_at = now()""").format(
-            (RSS_FEED_URLS.keys(), RSS_FEED_URLS.values())
-        )
-        conn = self._require_conn()
-        conn.execute(query)
-        conn.commit()
+    #     query = sql.SQL("""INSERT INTO news_sources (name, url)
+    #     VALUES (%s, %s)
+    #     ON CONFLICT (url) DO UPDATE
+    #     SET name = EXCLUDED.name, updated_at = now()""").format(
+    #         (RSS_FEED_URLS.keys(), RSS_FEED_URLS.values())
+    #     )
+    #     conn = self._require_conn()
+    #     conn.execute(query)
+    #     conn.commit()
 
 
     def fetch_one(self, query, params=None):

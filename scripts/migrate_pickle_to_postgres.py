@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from src.lib.base.datetime_utils import ensure_utc  # noqa: E402
+from trend_core.base.datetime_utils import ensure_utc  # noqa: E402
 from snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
 
 ENVELOPE_VERSION = 1
@@ -52,11 +52,23 @@ def unwrap_envelope(data: object) -> object:
     return data["payload"]
 
 
+
+class SentimentResponse:
+    """Stand-in so snapshots pickled under src.base can load."""
+
+
+class _LegacyUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == "src.base.sentiment_response" and name == "SentimentResponse":
+            return SentimentResponse
+        return super().find_class(module, name)
+
+
 def load_snapshot(path: Path) -> object:
     if not path.is_file():
         raise FileNotFoundError(f"Missing snapshot: {path}")
     with open(path, "rb") as f:
-        return unwrap_envelope(pickle.load(f))
+        return unwrap_envelope(_LegacyUnpickler(f).load())
 
 
 def tickers_from_pickle(sr: Any) -> list[str]:
@@ -243,7 +255,7 @@ class TickerEnricher:
             return None, has_buy
         try:
             if self._svc is None:
-                from src.lib.ticker_service import TickerService
+                from trend_core.ticker_service import TickerService
 
                 self._svc = TickerService()
             valid = bool(self._svc.is_tradable_stock_symbol(ticker))
@@ -306,7 +318,7 @@ def postgres_conninfo() -> str:
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env", override=False)
-    from src.lib.configs import (
+    from trend_core.configs import (
         POSTGRES_DB,
         POSTGRES_HOST,
         POSTGRES_PASSWORD,
@@ -465,7 +477,7 @@ def run_migration(
         return counts
 
     import psycopg
-    from src.lib.configs import RSS_FEED_URLS
+    from trend_core.configs import RSS_FEED_URLS
 
     enricher = TickerEnricher() if ticker_lookup is None else None
     lookup = ticker_lookup if ticker_lookup is not None else enricher.lookup
