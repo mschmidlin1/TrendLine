@@ -30,6 +30,7 @@ from snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E
 
 ENVELOPE_VERSION = 1
 TERMINAL_STATUS_VALUES = frozenset({"filled", "canceled", "expired", "rejected"})
+MIGRATED_BUY_FAILURE_REASON = "migrated: no buy in legacy snapshot"
 
 TickerLookup = Callable[[str, bool], tuple[str | None, bool]]
 
@@ -40,6 +41,7 @@ class MigrationCounts:
     sentiments: int = 0
     buys: int = 0
     sells: int = 0
+    placeholder_trades: int = 0
     skipped_served_only: list[str] = field(default_factory=list)
     source_names: set[str] = field(default_factory=set)
 
@@ -112,11 +114,66 @@ def _enum_value(value: Any) -> Any:
     return getattr(value, "value", value)
 
 
-def order_to_columns(order: Any) -> dict[str, Any]:
-    """Same Alpaca columns as TradeManager.archive_buy / archive_sell (linkage omitted)."""
+def _order_legs(order: Any) -> Jsonb | None:
+    legs = getattr(order, "legs", None)
+    if legs is None:
+        return None
+    if isinstance(legs, list) and legs and hasattr(legs[0], "model_dump_json"):
+        return Jsonb([json.loads(leg.model_dump_json()) for leg in legs])
+    if isinstance(legs, (dict, list)):
+        return Jsonb(legs)
+    if hasattr(legs, "model_dump_json"):
+        return Jsonb(json.loads(legs.model_dump_json()))
+    return Jsonb(json.loads(json.dumps(legs, default=str)))
+
+
+def _order_raw(order: Any) -> Jsonb:
+    dump_json = getattr(order, "model_dump_json", None)
+    if callable(dump_json):
+        return Jsonb(json.loads(dump_json()))
+    dump = getattr(order, "model_dump", None)
+    if callable(dump):
+        return Jsonb(json.loads(json.dumps(dump(), default=str)))
+    attrs: dict[str, Any] = {}
+    for name in dir(order):
+        if name.startswith("_"):
+            continue
+        try:
+            val = getattr(order, name)
+        except Exception:
+            continue
+        if callable(val):
+            continue
+        attrs[name] = val
+    return Jsonb(json.loads(json.dumps(attrs, default=str)))
+
+
+def order_to_columns(order: Any, side: str) -> dict[str, Any]:
+    """Project a pickled Alpaca order onto the orders table. `side` is forced from the pickle dict."""
     return {
         "alpaca_order_id": order.id,
+        "side": side,
+        "symbol": order.symbol,
+        "status": _enum_value(order.status),
         "client_order_id": order.client_order_id,
+        "asset_id": order.asset_id,
+        "asset_class": _enum_value(order.asset_class),
+        "order_class": _enum_value(order.order_class),
+        "order_type": _enum_value(order.order_type),
+        "type": _enum_value(order.type),
+        "time_in_force": _enum_value(order.time_in_force),
+        "position_intent": _enum_value(order.position_intent),
+        "qty": order.qty,
+        "notional": order.notional,
+        "filled_qty": order.filled_qty,
+        "filled_avg_price": order.filled_avg_price,
+        "limit_price": order.limit_price,
+        "stop_price": order.stop_price,
+        "trail_percent": order.trail_percent,
+        "trail_price": order.trail_price,
+        "hwm": order.hwm,
+        "ratio_qty": order.ratio_qty,
+        "extended_hours": order.extended_hours,
         "created_at": order.created_at,
         "updated_at": order.updated_at,
         "submitted_at": order.submitted_at,
@@ -128,29 +185,84 @@ def order_to_columns(order: Any) -> dict[str, Any]:
         "replaced_at": order.replaced_at,
         "replaced_by": order.replaced_by,
         "replaces": order.replaces,
-        "asset_id": order.asset_id,
-        "symbol": order.symbol,
-        "asset_class": _enum_value(order.asset_class),
-        "notional": order.notional,
-        "qty": order.qty,
-        "filled_qty": order.filled_qty,
-        "filled_avg_price": order.filled_avg_price,
-        "order_class": _enum_value(order.order_class),
-        "order_type": _enum_value(order.order_type),
-        "type": _enum_value(order.type),
-        "side": _enum_value(order.side),
-        "time_in_force": _enum_value(order.time_in_force),
-        "limit_price": order.limit_price,
-        "stop_price": order.stop_price,
-        "status": _enum_value(order.status),
-        "extended_hours": order.extended_hours,
-        "legs": Jsonb(order.legs) if isinstance(order.legs, (dict, list)) else order.legs,
-        "trail_percent": order.trail_percent,
-        "trail_price": order.trail_price,
-        "hwm": order.hwm,
-        "position_intent": _enum_value(order.position_intent),
-        "ratio_qty": order.ratio_qty,
+        "legs": _order_legs(order),
+        "raw": _order_raw(order),
     }
+
+
+def _pickle_orders_by_symbol(orders: Any) -> dict[str, Any]:
+    if not orders:
+        return {}
+    keyed: dict[str, Any] = {}
+    for sym, order in orders.items():
+        if order is None:
+            continue
+        keyed[str(sym).upper()] = order
+    return keyed
+
+
+def order_rows_from_entry(entry: dict) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for buy_order in _pickle_orders_by_symbol(entry.get("buy_orders")).values():
+        rows.append(order_to_columns(buy_order, "buy"))
+    for sell_order in _pickle_orders_by_symbol(entry.get("sell_orders")).values():
+        rows.append(order_to_columns(sell_order, "sell"))
+    return rows
+
+
+def _orders_by_ticker(orders: dict[str, Any]) -> dict[str, Any]:
+    """Index pickle orders by dict key and by the order's own symbol."""
+    keyed = dict(orders)
+    for order in orders.values():
+        symbol = str(getattr(order, "symbol", "") or "").upper()
+        if symbol and symbol not in keyed:
+            keyed[symbol] = order
+    return keyed
+
+
+def trade_rows_from_entry(entry: dict, sentiment_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One trades row per bought symbol, plus a failure row for leftover positive/valid sentiments."""
+    buys = _orders_by_ticker(_pickle_orders_by_symbol(entry.get("buy_orders")))
+    sells = _orders_by_ticker(_pickle_orders_by_symbol(entry.get("sell_orders")))
+    article_id = entry.get("article_id")
+    archived_at = ensure_utc(entry.get("archived_at")) or datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    for sent in sentiment_rows:
+        ticker = str(sent["ticker"]).upper()
+        buy_order = buys.get(ticker)
+        if buy_order is not None:
+            sell_order = sells.get(ticker)
+            if sell_order is None:
+                sell_sym = str(getattr(buy_order, "symbol", ticker)).upper()
+                sell_order = sells.get(sell_sym)
+            buy_at = getattr(buy_order, "created_at", None) or archived_at
+            sell_at = None if sell_order is None else (getattr(sell_order, "created_at", None) or archived_at)
+            rows.append(
+                {
+                    "article_id": article_id,
+                    "symbol": ticker,
+                    "buy_attempted_at": buy_at,
+                    "buy_order_id": buy_order.id,
+                    "buy_failure_reason": None,
+                    "sell_attempted_at": sell_at,
+                    "sell_order_id": None if sell_order is None else sell_order.id,
+                    "sell_failure_reason": None,
+                }
+            )
+        elif sent.get("sentiment") == "positive" and sent.get("ticker_valid"):
+            rows.append(
+                {
+                    "article_id": article_id,
+                    "symbol": ticker,
+                    "buy_attempted_at": archived_at,
+                    "buy_order_id": None,
+                    "buy_failure_reason": MIGRATED_BUY_FAILURE_REASON,
+                    "sell_attempted_at": None,
+                    "sell_order_id": None,
+                    "sell_failure_reason": None,
+                }
+            )
+    return rows
 
 
 def _article_entry(entry: dict) -> Any:
@@ -198,7 +310,6 @@ def article_row_from_entry(entry: dict, source_id: int) -> dict[str, Any]:
         "raw_entry": raw_entry_json(article),
         "archived_at": archived_at,
         "sentiment_analyzed_at": archived_at,
-        "resulted_in_purchase": bool(entry.get("resulted_in_purchase")),
         "sentiment_raw_response": None if sr is None else getattr(sr, "raw_response", None),
         "sentiment_format_match": None if sr is None else getattr(sr, "format_match", None),
     }
@@ -270,7 +381,11 @@ class TickerEnricher:
             return None, has_buy
 
 
-def count_from_entries(entries: list[dict], served: Iterable[str] | None) -> MigrationCounts:
+def count_from_entries(
+    entries: list[dict],
+    served: Iterable[str] | None,
+    ticker_lookup: TickerLookup | None = None,
+) -> MigrationCounts:
     counts = MigrationCounts()
     archived_ids: set[str] = set()
     for entry in entries:
@@ -279,16 +394,15 @@ def count_from_entries(entries: list[dict], served: Iterable[str] | None) -> Mig
         if article_id:
             archived_ids.add(article_id)
         counts.articles += 1
-        counts.sentiments += len(sentiment_rows_from_entry(entry))
-        buys = entry.get("buy_orders") or {}
-        sells = entry.get("sell_orders") or {}
-        for sym, bo in buys.items():
-            if bo is None:
-                continue
-            counts.buys += 1
-            so = sells.get(sym)
-            if so is not None:
-                counts.sells += 1
+        sent_rows = sentiment_rows_from_entry(entry, ticker_lookup=ticker_lookup)
+        counts.sentiments += len(sent_rows)
+        buys = _pickle_orders_by_symbol(entry.get("buy_orders"))
+        sells = _pickle_orders_by_symbol(entry.get("sell_orders"))
+        counts.buys += len(buys)
+        counts.sells += len(sells)
+        for trade in trade_rows_from_entry(entry, sent_rows):
+            if trade["buy_failure_reason"]:
+                counts.placeholder_trades += 1
         name = entry.get("source_name")
         if name:
             counts.source_names.add(name)
@@ -411,8 +525,9 @@ def insert_entry(
     conflict = "article_id" if force else None
     _insert_row(cur, "articles", article_row, on_conflict=conflict)
 
+    sent_rows = sentiment_rows_from_entry(entry, ticker_lookup=ticker_lookup)
     sentiment_id_by_ticker: dict[str, int] = {}
-    for sent_row in sentiment_rows_from_entry(entry, ticker_lookup=ticker_lookup):
+    for sent_row in sent_rows:
         sent_conflict = "article_id, ticker" if force else None
         sent_id = _insert_row(
             cur,
@@ -431,28 +546,40 @@ def insert_entry(
         if sent_id is not None:
             sentiment_id_by_ticker[sent_row["ticker"]] = sent_id
 
-    buys = entry.get("buy_orders") or {}
-    sells = entry.get("sell_orders") or {}
-    for sym, buy_order in buys.items():
-        if buy_order is None:
+    order_conflict = "alpaca_order_id" if force else None
+    for order_row in order_rows_from_entry(entry):
+        _insert_row(cur, "orders", order_row, on_conflict=order_conflict)
+
+    trade_conflict = "sentiment_id" if force else None
+    linked_tickers: set[str] = set()
+    for trade in trade_rows_from_entry(entry, sent_rows):
+        ticker = str(trade["symbol"]).upper()
+        sent_id = sentiment_id_by_ticker.get(ticker)
+        if sent_id is None:
+            print(
+                f"Warning: no sentiment row for {article_row['article_id']!r} {ticker}; "
+                "skipping trades row"
+            )
             continue
-        buy_row = {
-            "article_id": article_row["article_id"],
-            "sentiment_id": sentiment_id_by_ticker.get(str(sym).upper())
-            or sentiment_id_by_ticker.get(getattr(buy_order, "symbol", "")),
-            "is_terminal": is_order_terminal(buy_order),
-            **order_to_columns(buy_order),
-        }
-        _insert_row(cur, "buy_orders", buy_row, on_conflict="alpaca_order_id" if force else None)
-        sell_order = sells.get(sym)
-        if sell_order is None:
+        linked_tickers.add(ticker)
+        _insert_row(
+            cur,
+            "trades",
+            {"sentiment_id": sent_id, **trade},
+            on_conflict=trade_conflict,
+        )
+
+    for sym, buy_order in _pickle_orders_by_symbol(entry.get("buy_orders")).items():
+        ticker = str(sym).upper()
+        order_symbol = str(getattr(buy_order, "symbol", "") or "").upper()
+        if ticker in linked_tickers or order_symbol in linked_tickers:
             continue
-        sell_row = {
-            "buy_order_id": buy_order.id,
-            "is_terminal": is_order_terminal(sell_order),
-            **order_to_columns(sell_order),
-        }
-        _insert_row(cur, "sell_orders", sell_row, on_conflict="alpaca_order_id" if force else None)
+        if ticker in sentiment_id_by_ticker or order_symbol in sentiment_id_by_ticker:
+            continue
+        print(
+            f"Warning: pickled buy {buy_order.id} for {ticker} has no sentiment row; "
+            "orders inserted, no trade"
+        )
 
 
 def run_migration(
@@ -462,12 +589,20 @@ def run_migration(
     ticker_lookup: TickerLookup | None = None,
 ) -> MigrationCounts:
     entries, served = load_trade_and_news(data_dir)
-    counts = count_from_entries(entries, served if isinstance(served, (set, list)) else None)
+
+    enricher = TickerEnricher() if ticker_lookup is None else None
+    lookup = ticker_lookup if ticker_lookup is not None else enricher.lookup
+    counts = count_from_entries(
+        entries,
+        served if isinstance(served, (set, list)) else None,
+        ticker_lookup=lookup,
+    )
 
     print(f"Pickle articles:          {counts.articles}")
     print(f"Pickle sentiments (split): {counts.sentiments}")
     print(f"Pickle buy_orders:        {counts.buys}")
     print(f"Pickle sell_orders:       {counts.sells}")
+    print(f"Placeholder trades:       {counts.placeholder_trades}")
     print(f"Skipped served-only:      {len(counts.skipped_served_only)}")
     for url in counts.skipped_served_only:
         print(f"  skip {url}")
@@ -478,9 +613,6 @@ def run_migration(
 
     import psycopg
     from trend_core.configs import RSS_FEED_URLS
-
-    enricher = TickerEnricher() if ticker_lookup is None else None
-    lookup = ticker_lookup if ticker_lookup is not None else enricher.lookup
 
     with psycopg.connect(postgres_conninfo()) as conn:
         with conn.cursor() as cur:
@@ -509,17 +641,17 @@ def run_migration(
             n_articles = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM sentiments")
             n_sent = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM buy_orders")
-            n_buys = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM sell_orders")
-            n_sells = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM orders")
+            n_orders = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM trades")
+            n_trades = cur.fetchone()[0]
 
     print("DB after commit:")
     print(f"  news_sources: {n_sources}")
     print(f"  articles:     {n_articles} (pickle {counts.articles})")
     print(f"  sentiments:   {n_sent} (pickle {counts.sentiments})")
-    print(f"  buy_orders:   {n_buys} (pickle {counts.buys})")
-    print(f"  sell_orders:  {n_sells} (pickle {counts.sells})")
+    print(f"  orders:       {n_orders} (pickle buys {counts.buys} + sells {counts.sells})")
+    print(f"  trades:       {n_trades} (placeholders {counts.placeholder_trades})")
     print(
         "Do not delete persistent_data/. After you are satisfied, rename it:\n"
         "  mv persistent_data persistent_data.bak"
