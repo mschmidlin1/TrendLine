@@ -3,7 +3,7 @@ from news_service import NewsScrapingService, PendingSentimentAnalysis
 from sentiment_service import SentimentService
 from timing_service import TimingService
 from trend_core.base.tl_logger import LoggingService
-from trend_core.trader import StockTrader
+from trend_core.trader import StockTrader, OrderAttempt
 from trend_core.configs import BASE_PURCHASE_DOLLARS, BASE_PURCHASE_QTY
 from trade_manager import TradeManager, PendingBuy, PendingSell
 from trend_core.configs import OLLAMA_WARMUP_ON_STARTUP
@@ -12,9 +12,8 @@ import atexit
 import signal
 import sys
 from alpaca.trading.enums import TimeInForce
-from alpaca.trading.models import Order
-from datetime import datetime, timezone
 from heartbeat_service import HeartbeatService
+
 def _shutdown_persist() -> None:
     database_service.close()
 
@@ -76,22 +75,16 @@ while True:
                 logger.log_error(f"SentimentService crashed: {type(e).__name__}: {e}")
 
 
-            #get all the tickers that need to be purchased
-            pending_buys: list[PendingBuy] = trade_manager.get_pending_buys()
-            orders = []
-            for buy in pending_buys:
-                order: Order | None = stock_trader.buy(
-                    buy.ticker, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
-                )
-                orders.append(order)
-                #create buy entry in purchase table now?
-            # if rows:
-            #     logger.log_info(
-            #         f"Buys for headline: {len(buy_orders)}/{len(tickers)} filled "
-            #         f"({','.join(tickers)}) — {entry.get('title', '')[:80]!r}"
-            #     )
+        #get all the tickers that need to be purchased
+        pending_buys: list[PendingBuy] = trade_manager.get_pending_buys()
+        buy_order_attempts = []
+        for buy in pending_buys:
+            order: OrderAttempt = stock_trader.buy(
+                buy.ticker, quantity=BASE_PURCHASE_QTY, time_in_force=TimeInForce.GTC
+            )
+            buy_order_attempts.append(order)
 
-            trade_manager.archive_buy(pending_buys, orders)
+        trade_manager.archive_buy(pending_buys, buy_order_attempts)
 
         timing_service.mark_scrape_completed()
 
@@ -116,11 +109,11 @@ while True:
 
     ready_to_sell: list[PendingSell] = trade_manager.query_ready_to_sell()
 
-    sell_orders = []
+    sell_order_attempts = []
     for stock in ready_to_sell:
-        sell_order: Order = stock_trader.sell(stock.ticker, quantity=stock.qty, time_in_force=TimeInForce.GTC)
-        sell_orders.append(sell_order)
+        sell_order_attempt: OrderAttempt = stock_trader.sell(stock.ticker, quantity=float(stock.qty), time_in_force=TimeInForce.GTC)
+        sell_order_attempts.append(sell_order_attempt)
 
-    trade_manager.archive_sell(ready_to_sell, sell_orders)
+    trade_manager.archive_sell(ready_to_sell, sell_order_attempts)
 
 

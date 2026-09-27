@@ -98,18 +98,28 @@ class DatabaseService(metaclass=SingletonMeta):
         values = list(row.values())
         return self.insert_row(table, columns, values, returning)
     
-    # def init_news_sources_table(self) -> None:
+    def update_row_dict(self, table: str, row: dict, key: str) -> None:
+        """UPDATE one row. `row` holds the new values; `row[key]` identifies the row."""
+        if key not in row:
+            raise ValueError(f"row must contain key column '{key}'")
+        set_cols = [c for c in row if c != key]
+        if not set_cols:
+            raise ValueError("No columns to update.")
 
-    #     query = sql.SQL("""INSERT INTO news_sources (name, url)
-    #     VALUES (%s, %s)
-    #     ON CONFLICT (url) DO UPDATE
-    #     SET name = EXCLUDED.name, updated_at = now()""").format(
-    #         (RSS_FEED_URLS.keys(), RSS_FEED_URLS.values())
-    #     )
-    #     conn = self._require_conn()
-    #     conn.execute(query)
-    #     conn.commit()
+        query = sql.SQL("UPDATE {table} SET {sets} WHERE {key} = {key_ph}").format(
+            table=sql.Identifier(table),
+            sets=sql.SQL(", ").join(
+                sql.SQL("{} = {}").format(sql.Identifier(c), sql.Placeholder())
+                for c in set_cols
+            ),
+            key=sql.Identifier(key),
+            key_ph=sql.Placeholder(),
+        )
+        values = [row[c] for c in set_cols] + [row[key]]
 
+        conn = self._require_conn()
+        conn.execute(query, values)
+        conn.commit()
 
     def fetch_one(self, query, params=None):
         conn = self._require_conn()

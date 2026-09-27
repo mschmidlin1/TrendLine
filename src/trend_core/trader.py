@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
@@ -23,6 +24,12 @@ from trend_core.base.alpaca_client import AlpacaClient
 from trend_core.ticker_service import TickerService
 from trend_core.converters import orders_to_dataframe
 from trend_core.account_service import AccountService
+
+@dataclass(frozen=True)
+class OrderAttempt:
+    order: Order | None
+    failure_reason: str | None = None
+
 
 class Trader():
     """
@@ -153,7 +160,7 @@ class Trader():
         return self.get_orders(QueryOrderStatus.CLOSED)
 
     def buy(self, symbol: str, quantity: Optional[float] = None, price: Optional[float] = None,
-            side: OrderSide = OrderSide.BUY, time_in_force: TimeInForce = TimeInForce.GTC) -> Order | None:
+            side: OrderSide = OrderSide.BUY, time_in_force: TimeInForce = TimeInForce.GTC) -> OrderAttempt:
         """
         Execute a buy order for the specified symbol.
         
@@ -168,18 +175,19 @@ class Trader():
             time_in_force (TimeInForce, optional): Order time in force. Defaults to TimeInForce.GTC.
             
         Returns:
-            int: `alpaca.trading.models.Order` or `None` if no trade was submitted
+            OrderAttempt: `OrderAttempt`
             
         Raises:
             ValueError: If symbol is not available or if both/neither quantity and price are specified.
         """
+
         #check function imputs
         if (quantity is None and price is None) or (quantity!=None and price!=None):
             raise ValueError("Must specify either quantity or price.")
 
         if not self.ticker_service.is_tradable_stock_symbol(symbol):
             self._logger.log_warning(f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping buy.")
-            return None
+            return OrderAttempt(None, f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping buy.")
 
         #check to make sure you have enough buying power
         try:
@@ -187,22 +195,22 @@ class Trader():
                 price = self.get_ask_price(symbol)*quantity
         except KeyError as e:
             self._logger.log_warning(f"Could not get quote for Symbol {symbol}. Abandoning stock buy.")
-            return None
+            return OrderAttempt(None, f"Could not get quote for Symbol {symbol}. Abandoning stock buy.")
         try:
             buying_power = self.account_service.get_buying_power()
         except RequestsConnectionError as e:
             self._logger.log_warning(
                 f"Connection error while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}"
             )
-            return None
+            return OrderAttempt(None, f"Connection error while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}")
         except RequestsTimeout as e:
             self._logger.log_warning(
                 f"Timeout while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}"
             )
-            return None
+            return OrderAttempt(None, f"Timeout while fetching buying power for buy of '{symbol}'. Skipping. Error: {e}")
         if price>buying_power:
             self._logger.log_warning(f"Not enough funds to buy {price} of '{symbol}'. Buying power is {buying_power}")
-            return None
+            return OrderAttempt(None, f"Not enough funds to buy {price} of '{symbol}'. Buying power is {buying_power}")
         elif quantity is None:
             self._logger.log_info(f"Buying {price} dollars of {symbol}.")
             market_order_data = MarketOrderRequest(
@@ -223,15 +231,15 @@ class Trader():
             market_order: Order = self.trading_client.submit_order(market_order_data)
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected buy for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Alpaca rejected buy for '{symbol}'. Skipping. Error: {e}")
         except RequestsConnectionError as e:
             self._logger.log_warning(f"Connection error placing buy for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Connection error placing buy for '{symbol}'. Skipping. Error: {e}")
         except RequestsTimeout as e:
             self._logger.log_warning(f"Timeout placing buy for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Timeout placing buy for '{symbol}'. Skipping. Error: {e}")
 
-        return market_order
+        return OrderAttempt(market_order, None)
 
     def sell_all(self, cancel_orders: bool = True) -> None:
         """
@@ -243,7 +251,7 @@ class Trader():
         self.trading_client.close_all_positions(cancel_orders=cancel_orders)
 
     def sell(self, symbol: str, quantity: Optional[float] = None, price: Optional[float] = None,
-             side: OrderSide = OrderSide.SELL, time_in_force: TimeInForce = TimeInForce.GTC) -> Order:
+             side: OrderSide = OrderSide.SELL, time_in_force: TimeInForce = TimeInForce.GTC) -> OrderAttempt:
         """
         Execute a sell order for the specified symbol.
         
@@ -258,7 +266,7 @@ class Trader():
             time_in_force (TimeInForce, optional): Order time in force. Defaults to TimeInForce.GTC.
             
         Returns:
-            Order: The submitted order object from Alpaca.
+            OrderAttempt: `OrderAttempt`
             
         Raises:
             ValueError: If symbol is not available or if both/neither quantity and price are specified.
@@ -269,7 +277,7 @@ class Trader():
 
         if not self.ticker_service.is_tradable_stock_symbol(symbol):
             self._logger.log_warning(f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping sell.")
-            return None
+            return OrderAttempt(None, f"Symbol '{symbol}' is not active/tradable on Alpaca. Skipping sell.")
         
         if quantity is None:
             self._logger.log_info(f"Selling {price} dollars of {symbol}.")
@@ -291,15 +299,15 @@ class Trader():
             market_order: Order = self.trading_client.submit_order(market_order_data)
         except APIError as e:
             self._logger.log_warning(f"Alpaca rejected sell for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Alpaca rejected sell for '{symbol}'. Skipping. Error: {e}")
         except RequestsConnectionError as e:
             self._logger.log_warning(f"Connection error placing sell for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Connection error placing sell for '{symbol}'. Skipping. Error: {e}")
         except RequestsTimeout as e:
             self._logger.log_warning(f"Timeout placing sell for '{symbol}'. Skipping. Error: {e}")
-            return None
+            return OrderAttempt(None, f"Timeout placing sell for '{symbol}'. Skipping. Error: {e}")
 
-        return market_order
+        return OrderAttempt(market_order, None)
 
     def cancel_all_orders(self) -> List:
         """

@@ -1,8 +1,4 @@
--- 1. news_sources
--- 2. articles        → references news_sources
--- 3. sentiments      → references articles
--- 4. buy_orders      → references articles + sentiments
--- 5. sell_orders     → references buy_orders
+
 
 
 CREATE TABLE news_sources (
@@ -25,7 +21,6 @@ CREATE TABLE articles (
   raw_entry               JSONB NOT NULL,
   archived_at             TIMESTAMPTZ NOT NULL,  -- discovery/insert time (you set this in Python)
   sentiment_analyzed_at   TIMESTAMPTZ,           -- NULL until analysis done/skipped
-  resulted_in_purchase    BOOLEAN NOT NULL DEFAULT FALSE,
   sentiment_raw_response  TEXT,
   sentiment_format_match  BOOLEAN
 );
@@ -52,105 +47,74 @@ CREATE TABLE sentiments (
 CREATE INDEX idx_sentiments_ticker ON sentiments(ticker);
 CREATE INDEX idx_sentiments_sentiment ON sentiments(sentiment);
 
-
-CREATE TABLE buy_orders (
-  -- TrendLine linkage
-  article_id        TEXT NOT NULL REFERENCES articles(article_id),
-  sentiment_id      BIGINT REFERENCES sentiments(id),
-  is_terminal       BOOLEAN NOT NULL DEFAULT FALSE,
-
-  -- Alpaca Order fields
-  alpaca_order_id   UUID PRIMARY KEY,              -- Order.id
-  client_order_id   TEXT,
-  created_at        TIMESTAMPTZ,
-  updated_at        TIMESTAMPTZ,
-  submitted_at      TIMESTAMPTZ,
-  filled_at         TIMESTAMPTZ,
-  expired_at        TIMESTAMPTZ,
-  expires_at        TIMESTAMPTZ,
-  canceled_at       TIMESTAMPTZ,
-  failed_at         TIMESTAMPTZ,
-  replaced_at       TIMESTAMPTZ,
-  replaced_by       UUID,
-  replaces          UUID,
-  asset_id          UUID,
+CREATE TABLE orders (
+  alpaca_order_id   UUID PRIMARY KEY,
+  side              TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
   symbol            TEXT NOT NULL,
-  asset_class       TEXT,
-  notional          NUMERIC,
-  qty               NUMERIC,
-  filled_qty        NUMERIC,
-  filled_avg_price  NUMERIC,
-  order_class       TEXT,
-  order_type        TEXT,
-  type              TEXT,                          -- Alpaca also exposes Order.type
-  side              TEXT,
-  time_in_force     TEXT,
-  limit_price       NUMERIC,
-  stop_price        NUMERIC,
   status            TEXT NOT NULL,
-  extended_hours    BOOLEAN,
-  legs              JSONB,                         -- nested list of Order, if any
-  trail_percent     NUMERIC,
-  trail_price       NUMERIC,
-  hwm               NUMERIC,
-  position_intent   TEXT,
-  ratio_qty         NUMERIC
-);
 
-CREATE INDEX idx_buy_orders_article_symbol ON buy_orders(article_id, symbol);
-CREATE INDEX idx_buy_orders_sentiment ON buy_orders(sentiment_id);
-CREATE INDEX idx_buy_orders_ready_to_sell
-  ON buy_orders(filled_at)
-  WHERE NOT is_terminal AND status = 'filled';
-
-
-CREATE TABLE sell_orders (
-  -- TrendLine linkage
-  buy_order_id      UUID NOT NULL UNIQUE REFERENCES buy_orders(alpaca_order_id),
-  is_terminal       BOOLEAN NOT NULL DEFAULT FALSE,
-
-  -- Alpaca Order fields (same shape as buy_orders)
-  alpaca_order_id   UUID PRIMARY KEY,              -- Order.id
   client_order_id   TEXT,
-  created_at        TIMESTAMPTZ,
-  updated_at        TIMESTAMPTZ,
-  submitted_at      TIMESTAMPTZ,
-  filled_at         TIMESTAMPTZ,
-  expired_at        TIMESTAMPTZ,
-  expires_at        TIMESTAMPTZ,
-  canceled_at       TIMESTAMPTZ,
-  failed_at         TIMESTAMPTZ,
-  replaced_at       TIMESTAMPTZ,
-  replaced_by       UUID,
-  replaces          UUID,
   asset_id          UUID,
-  symbol            TEXT NOT NULL,
   asset_class       TEXT,
-  notional          NUMERIC,
-  qty               NUMERIC,
-  filled_qty        NUMERIC,
-  filled_avg_price  NUMERIC,
   order_class       TEXT,
   order_type        TEXT,
   type              TEXT,
-  side              TEXT,
   time_in_force     TEXT,
+  position_intent   TEXT,
+
+  qty               NUMERIC,
+  notional          NUMERIC,
+  filled_qty        NUMERIC,
+  filled_avg_price  NUMERIC,
   limit_price       NUMERIC,
   stop_price        NUMERIC,
-  status            TEXT NOT NULL,
-  extended_hours    BOOLEAN,
-  legs              JSONB,
   trail_percent     NUMERIC,
   trail_price       NUMERIC,
   hwm               NUMERIC,
-  position_intent   TEXT,
-  ratio_qty         NUMERIC
-);
+  ratio_qty         NUMERIC,
+  extended_hours    BOOLEAN,
 
-CREATE INDEX idx_sell_orders_symbol ON sell_orders(symbol);
-CREATE INDEX idx_sell_orders_open
-  ON sell_orders(submitted_at)
-  WHERE NOT is_terminal;
+  created_at        TIMESTAMPTZ,
+  updated_at        TIMESTAMPTZ,
+  submitted_at      TIMESTAMPTZ,
+  filled_at         TIMESTAMPTZ,
+  expired_at        TIMESTAMPTZ,
+  expires_at        TIMESTAMPTZ,
+  canceled_at       TIMESTAMPTZ,
+  failed_at         TIMESTAMPTZ,
+  replaced_at       TIMESTAMPTZ,
+  replaced_by       UUID,
+  replaces          UUID,
+
+  legs              JSONB,
+  raw               JSONB NOT NULL,
+
+  is_terminal       BOOLEAN GENERATED ALWAYS AS
+  (status IN ('filled', 'canceled', 'expired', 'rejected')) STORED
+);
+CREATE INDEX idx_orders_open ON orders (alpaca_order_id) WHERE NOT is_terminal;
+CREATE INDEX idx_orders_symbol ON orders (symbol);
+
+CREATE TABLE trades (
+  id                  BIGSERIAL PRIMARY KEY,
+  sentiment_id        BIGINT NOT NULL UNIQUE REFERENCES sentiments(id),
+  article_id          TEXT   NOT NULL REFERENCES articles(article_id),
+  symbol              TEXT   NOT NULL,
+
+  buy_attempted_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  buy_order_id        UUID UNIQUE REFERENCES orders(alpaca_order_id),
+  buy_failure_reason  TEXT,
+
+  sell_attempted_at   TIMESTAMPTZ,
+  sell_order_id       UUID UNIQUE REFERENCES orders(alpaca_order_id),
+  sell_failure_reason TEXT,
+
+  CHECK ((buy_order_id IS NULL) <> (buy_failure_reason IS NULL)),
+  CHECK (NOT (sell_order_id IS NOT NULL AND sell_failure_reason IS NOT NULL))
+);
+CREATE INDEX idx_trades_article ON trades (article_id);
+CREATE INDEX idx_trades_buy_order ON trades (buy_order_id);
+CREATE INDEX idx_trades_sell_order ON trades (sell_order_id);
 
 
 CREATE TABLE heartbeat (
