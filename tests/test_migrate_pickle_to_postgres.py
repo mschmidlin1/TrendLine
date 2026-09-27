@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import pickle
 import sys
 import tempfile
@@ -29,9 +30,21 @@ def _sentiment(sentiment="positive", ticker="NVDA,GLW", format_match=True, raw="
     )
 
 
+class _FakeOrder(SimpleNamespace):
+    def model_dump_json(self):
+        return json.dumps(
+            {
+                "id": str(self.id),
+                "symbol": self.symbol,
+                "status": self.status.value if hasattr(self.status, "value") else self.status,
+                "side": self.side.value if hasattr(self.side, "value") else self.side,
+            }
+        )
+
+
 def _order(symbol="NVDA", status=OrderStatus.FILLED, order_id=None):
     now = datetime.now(timezone.utc)
-    return SimpleNamespace(
+    return _FakeOrder(
         id=order_id or uuid4(),
         client_order_id="cid",
         created_at=now,
@@ -152,15 +165,6 @@ class TestMigrateTransforms(unittest.TestCase):
         served = {"https://example.com/a", "https://example.com/only-served"}
         skipped = migrator.served_only_ids(served, archived)
         self.assertEqual(skipped, ["https://example.com/only-served"])
-
-    def test_filled_is_terminal_even_if_pickle_flag_false(self):
-        order = _order(status=OrderStatus.FILLED)
-        self.assertTrue(migrator.is_order_terminal(order))
-        entry = _entry(buy=order)
-        self.assertFalse(entry["buy_order_terminal"][order.symbol])
-
-    def test_new_order_not_terminal(self):
-        self.assertFalse(migrator.is_order_terminal(_order(status=OrderStatus.NEW)))
 
     def test_count_from_entries(self):
         buy = _order()

@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from time import struct_time
 from typing import Any, Callable, Iterable
-
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
@@ -24,12 +23,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-
 from trend_core.base.datetime_utils import ensure_utc  # noqa: E402
 from snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
 
 ENVELOPE_VERSION = 1
-TERMINAL_STATUS_VALUES = frozenset({"filled", "canceled", "expired", "rejected"})
 MIGRATED_BUY_FAILURE_REASON = "migrated: no buy in legacy snapshot"
 
 TickerLookup = Callable[[str, bool], tuple[str | None, bool]]
@@ -97,72 +94,23 @@ def sentiment_from_pickle(sr: Any) -> str:
     return str(value)
 
 
-def is_order_terminal(order: Any) -> bool:
-    """Alpaca status in filled/canceled/expired/rejected — not pickle buy_order_terminal."""
-    status = getattr(order, "status", None)
-    if status is None:
-        return False
-    value = getattr(status, "value", status)
-    if isinstance(value, str):
-        return value.lower() in TERMINAL_STATUS_VALUES
-    return False
-
-
-def _enum_value(value: Any) -> Any:
-    if value is None:
-        return None
-    return getattr(value, "value", value)
-
-
-def _order_legs(order: Any) -> Jsonb | None:
-    legs = getattr(order, "legs", None)
-    if legs is None:
-        return None
-    if isinstance(legs, list) and legs and hasattr(legs[0], "model_dump_json"):
-        return Jsonb([json.loads(leg.model_dump_json()) for leg in legs])
-    if isinstance(legs, (dict, list)):
-        return Jsonb(legs)
-    if hasattr(legs, "model_dump_json"):
-        return Jsonb(json.loads(legs.model_dump_json()))
-    return Jsonb(json.loads(json.dumps(legs, default=str)))
-
-
-def _order_raw(order: Any) -> Jsonb:
-    dump_json = getattr(order, "model_dump_json", None)
-    if callable(dump_json):
-        return Jsonb(json.loads(dump_json()))
-    dump = getattr(order, "model_dump", None)
-    if callable(dump):
-        return Jsonb(json.loads(json.dumps(dump(), default=str)))
-    attrs: dict[str, Any] = {}
-    for name in dir(order):
-        if name.startswith("_"):
-            continue
-        try:
-            val = getattr(order, name)
-        except Exception:
-            continue
-        if callable(val):
-            continue
-        attrs[name] = val
-    return Jsonb(json.loads(json.dumps(attrs, default=str)))
-
-
 def order_to_columns(order: Any, side: str) -> dict[str, Any]:
     """Project a pickled Alpaca order onto the orders table. `side` is forced from the pickle dict."""
+    def enum(v):
+        return None if v is None else v.value
     return {
         "alpaca_order_id": order.id,
         "side": side,
         "symbol": order.symbol,
-        "status": _enum_value(order.status),
+        "status": enum(order.status),
         "client_order_id": order.client_order_id,
         "asset_id": order.asset_id,
-        "asset_class": _enum_value(order.asset_class),
-        "order_class": _enum_value(order.order_class),
-        "order_type": _enum_value(order.order_type),
-        "type": _enum_value(order.type),
-        "time_in_force": _enum_value(order.time_in_force),
-        "position_intent": _enum_value(order.position_intent),
+        "asset_class": enum(order.asset_class),
+        "order_class": enum(order.order_class),
+        "order_type": enum(order.order_type),
+        "type": enum(order.type),
+        "time_in_force": enum(order.time_in_force),
+        "position_intent": enum(order.position_intent),
         "qty": order.qty,
         "notional": order.notional,
         "filled_qty": order.filled_qty,
@@ -185,8 +133,9 @@ def order_to_columns(order: Any, side: str) -> dict[str, Any]:
         "replaced_at": order.replaced_at,
         "replaced_by": order.replaced_by,
         "replaces": order.replaces,
-        "legs": _order_legs(order),
-        "raw": _order_raw(order),
+        "legs": None if order.legs is None
+                else Jsonb([json.loads(leg.model_dump_json()) for leg in order.legs]),
+        "raw": Jsonb(json.loads(order.model_dump_json())),
     }
 
 
@@ -668,10 +617,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow insert when articles is non-empty (ON CONFLICT DO NOTHING)",
     )
+    parser.add_argument(
+        "--apply-schema",
+        action="store_true",
+        help="Apply sql/schema.sql and seed news_sources before loading snapshots",
+    )
     args = parser.parse_args(argv)
     data_dir = args.data_dir
     if not data_dir.is_absolute():
         data_dir = ROOT / data_dir
+    if args.apply_schema:
+        from scripts.apply_schema import main as apply_schema
+        apply_schema()
     run_migration(data_dir, dry_run=args.dry_run, force=args.force)
     return 0
 
