@@ -8,6 +8,7 @@ from front_end.log_viewer import render_log_viewer
 from front_end.about_tab import render_about_doc
 from front_end.power_display import render_power_display
 import base64
+from pathlib import Path
 
 def main() -> None:
     st.set_page_config(page_title="TrendLine Dashboard", layout="wide")
@@ -28,7 +29,7 @@ def main() -> None:
     unsafe_allow_html=True,
 )
     #region Header
-    path = _REPO_ROOT / "resources" / "logo_small.png"
+    path = Path(__file__).resolve().parents[2] / "resources" / "logo_small.png"
     b64 = base64.b64encode(path.read_bytes()).decode()
     mime = "image/png"  # use "image/jpeg" for .jpg
     st.markdown(

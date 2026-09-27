@@ -13,7 +13,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "streamlit-dash"))
 
 from front_end.news_trades import NEWS_TRADE_COLUMNS, load_news_trades_dataframe, rows_to_news_trades_dataframe
-from src.lib.database.db_service import DatabaseService
+from trend_core.database.db_service import DatabaseService
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,7 +31,6 @@ def _row(**overrides: object) -> tuple:
         "format_match": True,
         "ticker_found": True,
         "raw_sentiment_response": "Positive | NVDA",
-        "resulted_in_purchase": True,
         "has_buy_order": True,
         "archived_at": datetime(2024, 1, 2, tzinfo=timezone.utc),
         "buy_order_id": "11111111-1111-1111-1111-111111111111",
@@ -103,7 +102,6 @@ class NewsTradesFrameTests(unittest.TestCase):
                 ticker=None,
                 ticker_found=None,
                 raw_sentiment_response="None",
-                resulted_in_purchase=False,
                 has_buy_order=False,
                 buy_order_id=None,
                 buy_order_symbol=None,
@@ -144,7 +142,7 @@ def _postgres_available() -> bool:
         from dotenv import load_dotenv
 
         load_dotenv(_ROOT / ".env", override=False)
-        from src.lib.configs import (
+        from trend_core.configs import (
             POSTGRES_DB,
             POSTGRES_HOST,
             POSTGRES_PASSWORD,
@@ -169,7 +167,7 @@ class NewsTradesPostgresTests(unittest.TestCase):
         import psycopg
         from psycopg.types.json import Jsonb
 
-        from src.lib.configs import (
+        from trend_core.configs import (
             POSTGRES_DB,
             POSTGRES_HOST,
             POSTGRES_PASSWORD,
@@ -200,9 +198,9 @@ class NewsTradesPostgresTests(unittest.TestCase):
                     """
                     INSERT INTO articles (
                         article_id, source_id, title, summary, published_raw, raw_entry,
-                        archived_at, sentiment_analyzed_at, resulted_in_purchase,
+                        archived_at, sentiment_analyzed_at,
                         sentiment_raw_response, sentiment_format_match
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         traded_id,
@@ -213,7 +211,6 @@ class NewsTradesPostgresTests(unittest.TestCase):
                         Jsonb({"title": "NVIDIA rallies"}),
                         datetime(2024, 1, 2, tzinfo=timezone.utc),
                         analyzed_at,
-                        True,
                         "Positive | NVDA",
                         True,
                     ),
@@ -238,48 +235,55 @@ class NewsTradesPostgresTests(unittest.TestCase):
                 sentiment_id = cur.fetchone()[0]
                 cur.execute(
                     """
-                    INSERT INTO buy_orders (
-                        article_id, sentiment_id, is_terminal, alpaca_order_id, symbol,
-                        qty, filled_avg_price, filled_at, status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        traded_id,
-                        sentiment_id,
-                        True,
-                        buy_id,
-                        "NVDA",
-                        Decimal("3"),
-                        Decimal("100.5"),
-                        datetime(2024, 1, 3, tzinfo=timezone.utc),
-                        "filled",
-                    ),
-                )
-                cur.execute(
-                    """
-                    INSERT INTO sell_orders (
-                        buy_order_id, is_terminal, alpaca_order_id, symbol,
-                        qty, filled_avg_price, filled_at, status
+                    INSERT INTO orders (
+                        alpaca_order_id, side, symbol, status, qty,
+                        filled_avg_price, filled_at, raw
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         buy_id,
-                        True,
-                        sell_id,
+                        "buy",
                         "NVDA",
+                        "filled",
+                        Decimal("3"),
+                        Decimal("100.5"),
+                        datetime(2024, 1, 3, tzinfo=timezone.utc),
+                        Jsonb({"id": str(buy_id), "side": "buy"}),
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO orders (
+                        alpaca_order_id, side, symbol, status, qty,
+                        filled_avg_price, filled_at, raw
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        sell_id,
+                        "sell",
+                        "NVDA",
+                        "filled",
                         Decimal("3"),
                         Decimal("110"),
                         datetime(2024, 1, 4, tzinfo=timezone.utc),
-                        "filled",
+                        Jsonb({"id": str(sell_id), "side": "sell"}),
                     ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO trades (
+                        sentiment_id, article_id, symbol, buy_order_id, sell_order_id
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (sentiment_id, traded_id, "NVDA", buy_id, sell_id),
                 )
                 cur.execute(
                     """
                     INSERT INTO articles (
                         article_id, source_id, title, raw_entry, archived_at,
-                        sentiment_analyzed_at, resulted_in_purchase,
+                        sentiment_analyzed_at,
                         sentiment_raw_response, sentiment_format_match
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         plain_id,
@@ -288,7 +292,6 @@ class NewsTradesPostgresTests(unittest.TestCase):
                         Jsonb({"title": "No ticker"}),
                         datetime(2024, 6, 1, tzinfo=timezone.utc),
                         analyzed_at,
-                        False,
                         "None",
                         True,
                     ),
@@ -296,8 +299,8 @@ class NewsTradesPostgresTests(unittest.TestCase):
                 cur.execute(
                     """
                     INSERT INTO articles (
-                        article_id, source_id, title, raw_entry, archived_at, resulted_in_purchase
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        article_id, source_id, title, raw_entry, archived_at
+                    ) VALUES (%s, %s, %s, %s, %s)
                     """,
                     (
                         pending_id,
@@ -305,7 +308,6 @@ class NewsTradesPostgresTests(unittest.TestCase):
                         "Still pending",
                         Jsonb({"title": "Still pending"}),
                         datetime(2024, 7, 1, tzinfo=timezone.utc),
-                        False,
                     ),
                 )
             conn.commit()
@@ -342,8 +344,14 @@ class NewsTradesPostgresTests(unittest.TestCase):
             DatabaseService().close()
             with psycopg.connect(conninfo) as conn:
                 with conn.cursor() as cur:
-                    cur.execute("DELETE FROM sell_orders WHERE alpaca_order_id = %s", (sell_id,))
-                    cur.execute("DELETE FROM buy_orders WHERE alpaca_order_id = %s", (buy_id,))
+                    cur.execute(
+                        "DELETE FROM trades WHERE article_id = ANY(%s)",
+                        ([traded_id, plain_id, pending_id],),
+                    )
+                    cur.execute(
+                        "DELETE FROM orders WHERE alpaca_order_id = ANY(%s)",
+                        ([buy_id, sell_id],),
+                    )
                     cur.execute(
                         "DELETE FROM sentiments WHERE article_id = ANY(%s)",
                         ([traded_id, plain_id, pending_id],),

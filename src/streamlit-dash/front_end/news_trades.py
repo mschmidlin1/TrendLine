@@ -20,7 +20,6 @@ NEWS_TRADE_COLUMNS: tuple[str, ...] = (
     "format_match",
     "ticker_found",
     "raw_sentiment_response",
-    "resulted_in_purchase",
     "has_buy_order",
     "archived_at",
     "buy_order_id",
@@ -62,8 +61,7 @@ SELECT
     a.sentiment_format_match AS format_match,
     s.ticker_valid AS ticker_found,
     a.sentiment_raw_response AS raw_sentiment_response,
-    a.resulted_in_purchase,
-    (b.alpaca_order_id IS NOT NULL) AS has_buy_order,
+    (t.buy_order_id IS NOT NULL) AS has_buy_order,
     a.archived_at,
     b.alpaca_order_id::text AS buy_order_id,
     b.symbol AS buy_order_symbol,
@@ -83,8 +81,9 @@ SELECT
 FROM articles a
 JOIN news_sources ns ON a.source_id = ns.id
 LEFT JOIN sentiments s ON s.article_id = a.article_id
-LEFT JOIN buy_orders b ON b.sentiment_id = s.id
-LEFT JOIN sell_orders so ON so.buy_order_id = b.alpaca_order_id
+LEFT JOIN trades t ON t.sentiment_id = s.id
+LEFT JOIN orders b ON b.alpaca_order_id = t.buy_order_id
+LEFT JOIN orders so ON so.alpaca_order_id = t.sell_order_id
 WHERE a.sentiment_analyzed_at IS NOT NULL
 ORDER BY a.archived_at DESC, s.ordinal ASC NULLS LAST
 """
