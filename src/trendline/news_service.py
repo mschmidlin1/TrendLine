@@ -45,24 +45,6 @@ class NewsScrapingService(metaclass=SingletonMeta):
                 self._logger.log_warning(f"When doing first scraping, unexpected status: {getattr(news_data[name], 'status')} ----- {url}")
         return news_data
 
-
-    # def get_persistent_snapshot(self) -> Dict[str, Any]:
-    #     """Return in-memory state to be persisted across restarts."""
-    #     return {
-    #         'rss_feeds': self.rss_feeds,
-    #         'served_articles': self.served_articles,
-    #         'news_data': self.news_data,
-    #     }
-
-    # def restore_from_persistent_snapshot(self, snapshot: Dict[str, Any]) -> None:
-    #     """Restore state from :meth:`get_persistent_snapshot`."""
-    #     for key in ('rss_feeds', 'served_articles', 'news_data'):
-    #         if key not in snapshot:
-    #             raise ValueError(f"Invalid persistent snapshot: missing '{key}'")
-    #     self.rss_feeds = snapshot['rss_feeds']
-    #     self.served_articles = snapshot['served_articles']
-    #     self.news_data = snapshot['news_data']
-
     def update(self) -> bool:
         """
         Updates the scraping for all the rss feeds.
@@ -211,7 +193,6 @@ class NewsScrapingService(metaclass=SingletonMeta):
         article_dict["raw_entry"] = Jsonb(json.loads(json.dumps(dict(article), default=str)))
         article_dict["archived_at"] = datetime.now(timezone.utc)
         article_dict["sentiment_analyzed_at"] = None
-        article_dict["resulted_in_purchase"] = False
         article_dict["sentiment_raw_response"] = None
         article_dict["sentiment_format_match"] = None
 
