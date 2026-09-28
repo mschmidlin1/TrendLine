@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trendline
+  namespace: trendline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trendline
+  template:
+    metadata:
+      labels:
+        app: trendline
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/mschmidlin1/trendline:latest
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - secretRef:
+                name: trendline-env
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
