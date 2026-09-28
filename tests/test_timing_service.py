@@ -1,7 +1,7 @@
 import unittest
 import time
 from datetime import timedelta, datetime
-from src.timing_service import TimingService
+from src.trendline.timing_service import TimingService
 
 
 class TestTimingService(unittest.TestCase):

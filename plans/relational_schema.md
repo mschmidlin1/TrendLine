@@ -166,7 +166,7 @@ LLM call metadata stays on the article (one analysis call per headline today). P
 
 One row per company/ticker mentioned for an article — **not** 1:1 with articles.
 
-Today’s pickled [`SentimentResponse`](../src/base/sentiment_response.py) stores one sentiment string plus a comma-joined `ticker` field. In the relational model that expands: e.g. `ticker="NVDA,GLW"`, `sentiment="positive"` becomes two rows sharing the same sentiment value (until the LLM is changed to emit per-company scores).
+Today’s pickled trade archive stores one sentiment string plus a comma-joined `ticker` field. In the relational model that expands: e.g. `ticker="NVDA,GLW"`, `sentiment="positive"` becomes two rows sharing the same sentiment value (until the LLM is changed to emit per-company scores).
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -264,7 +264,7 @@ No separate `article_id` required (reachable via buy → article), but adding `a
 | `news_data` etag/modified / last feed | In-memory only for the process lifetime |
 | Pickled Alpaca `Order` objects | Projected columns + `raw_order` JSONB on buy/sell tables |
 | Pickled `FeedParserDict` | Projected columns + `raw_entry` JSONB |
-| Pickled `SentimentResponse` (1 blob / article) | `articles.sentiment_*` metadata + many `sentiments` rows |
+| Pickled sentiment blob (1 per article) | `articles.sentiment_*` metadata + many `sentiments` rows |
 | Separate `article_tickers` table | Folded into `sentiments` |
 | `feed_http_state` table | Not used — etag/modified stay in memory |
 
@@ -380,7 +380,7 @@ CREATE TABLE sell_orders (
 
 ## Migration notes (schema-informed, not implementing yet)
 
-When expanding today’s `SentimentResponse`:
+When expanding a pickled sentiment record:
 
 1. Split `ticker` on commas → one `sentiments` row per symbol.
 2. Copy the single `sentiment` value onto each row (current LLM behavior).

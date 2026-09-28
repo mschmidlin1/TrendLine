@@ -1,23 +1,19 @@
+import sys
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import Mock
 from uuid import uuid4
 
 from alpaca.trading.enums import OrderStatus
 from alpaca.trading.models import Order
 
-from src.snapshot_migration import migrate_legacy_archived_entry_in_place
-from src.base.sentiment_response import SentimentResponse
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from snapshot_migration import migrate_legacy_archived_entry_in_place
 
 
 def _legacy_article():
     return {"title": "t", "link": "https://example.com/x", "published": "", "summary": ""}
-
-
-def _sentiment():
-    return SentimentResponse(
-        "positive", "NVDA", True, True, "Positive | NVDA",
-    )
 
 
 def _mock_order(symbol="NVDA"):
@@ -38,7 +34,6 @@ class TestSnapshotMigration(unittest.TestCase):
             "article_id": "https://example.com/x",
             "source_name": "CNBC",
             "article_entry": _legacy_article(),
-            "sentiment_response": _sentiment(),
             "buy_order": None,
             "sell_order": None,
             "buy_order_terminal": True,

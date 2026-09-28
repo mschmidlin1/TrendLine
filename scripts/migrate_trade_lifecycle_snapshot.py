@@ -19,13 +19,16 @@ from pathlib import Path
 
 # Repo root (parent of scripts/)
 ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
 
 from filelock import FileLock  # noqa: E402
 
-from src.configs import PERSISTENT_DATA_DIR  # noqa: E402
-from src.snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
+from src.lib.configs import PERSISTENT_DATA_DIR  # noqa: E402
+from snapshot_migration import migrate_legacy_archived_entry_in_place  # noqa: E402
 
 EnvelopeVersion = 1
 

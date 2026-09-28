@@ -1,7 +1,7 @@
 """
 Probe whether the TrendLine log coordination lock can be acquired immediately.
 
-Uses the same path as LockingFileHandler in src.base.tl_logger (logs.txt.lock next to
+Uses the same path as LockingFileHandler in src.lib.base.tl_logger (logs.txt.lock next to
 the log file). While the app is actively logging, the lock may be held only briefly;
 a "held" result can occasionally appear due to timing.
 """
@@ -18,7 +18,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from filelock import FileLock, Timeout  # noqa: E402
-from src.configs import LOG_FILE, LOG_PATH  # noqa: E402
+from src.lib.configs import LOG_FILE, LOG_PATH  # noqa: E402
 
 
 def main() -> int:
@@ -28,7 +28,7 @@ def main() -> int:
     parser.add_argument(
         "--lock-path",
         metavar="PATH",
-        help="Override lock file path (default: from src.configs LOG_PATH/LOG_FILE + .lock)",
+        help="Override lock file path (default: from src.lib.configs LOG_PATH/LOG_FILE + .lock)",
     )
     args = parser.parse_args()
 

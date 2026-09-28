@@ -1,12 +1,16 @@
 """Tests for timing category classification (news trades PnL buckets)."""
 from __future__ import annotations
 
+import sys
 import unittest
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from src.front_end.charts.timing_category import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "streamlit-dash"))
+
+from front_end.charts.timing_category import (
     TIMING_CAT_1,
     TIMING_CAT_2,
     TIMING_CAT_3,
@@ -17,7 +21,7 @@ from src.front_end.charts.timing_category import (
     classify_timing_category_row,
     prepare_completed_trades_for_timing,
 )
-from src.configs import DISPLAY_TIMEZONE_NAME
+from src.lib.configs import DISPLAY_TIMEZONE_NAME
 
 
 def _ts(d: tuple[int, int, int], h: int, m: int = 0, et: ZoneInfo | None = None) -> pd.Timestamp:

@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    env:
+      KUBECONFIG: /home/mike/.kube/config
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        run: |
+          IMAGE=ghcr.io/mschmidlin1/trendline
+          docker build -f src/streamlit-dash/Dockerfile \
+            -t "${IMAGE}:${{ github.sha }}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${{ github.sha }}"
+          docker push "${IMAGE}:latest"
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -k k8s/
+
+      - name: Apply Kubernetes Secret
+        env:
+          TRENDLINE_ENV: ${{ secrets.TRENDLINE_ENV }}
+        run: |
+          printf '%s\n' "$TRENDLINE_ENV" > /tmp/trendline.env
+          kubectl -n trendline create secret generic trendline-env \
+            --from-env-file=/tmp/trendline.env \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f /tmp/trendline.env
+
+      - name: Roll out new image
+        run: |
+          kubectl set image deployment/trendline \
+            app=ghcr.io/mschmidlin1/trendline:${{ github.sha }} \
+            -n trendline
+          kubectl rollout status deployment/trendline \
+            -n trendline \
+            --timeout=5m

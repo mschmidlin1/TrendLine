@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 import feedparser
 
-from src.news_scraper import NewsScrapingService
-from src.persistent_data_service import PersistentDataService
-from src.trade_lifecycle_manager import TradeLifecycleManager
+from src.trendline.news_service import NewsScrapingService
+from src.trendline.persistent_data_service import PersistentDataService
+from src.trendline.trade_lifecycle_manager import TradeLifecycleManager
 
 
 def _clear_singletons():

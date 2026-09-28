@@ -10,3 +10,8 @@ feedparser
 ollama
 wordcloud
 matplotlib
+python-dotenv
+psutil
+psycopg[binary]>=3.1.0
+
+-e . #install from the root (based on pyproject.toml) which installs trend_core, the -e stands for editable

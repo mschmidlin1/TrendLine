@@ -32,7 +32,7 @@ TrendLine uses the local Ollama server (default `http://localhost:11434`) for he
 
 ### Failure behavior (important)
 
-If Ollama errors during sentiment prediction, TrendLine will retry (warnings on the first 2 failures). If it still fails on the 3rd attempt it logs an error and returns a **non-actionable** `SentimentResponse` (no sentiment, `format_match=False`), so it will not place trades from that headline.
+If Ollama errors during sentiment prediction, TrendLine will retry (warnings on the first 2 failures). If it still fails on the 3rd attempt it logs an error and does not place trades from that headline.
 
 ### Key Capabilities
 
@@ -182,8 +182,7 @@ main.py
 │   ├── TickerService
 │   │   ├── SingletonMeta
 │   │   └── AlpacaClient
-│   ├── Timer
-│   └── SentimentResponse      (dataclass; produced by analyze flow)
+│   └── Timer
 ├── TimingService
 │   └── SingletonMeta
 ├── LoggingService
@@ -197,11 +196,10 @@ main.py
 └── TradeLifecycleManager
     ├── SingletonMeta
     ├── AlpacaClient
-    ├── LoggingService
-    └── SentimentResponse      (typed payloads when archiving)
+    └── LoggingService
 ```
 
-**Shared roles:** `SingletonMeta` ensures a single instance for each singleton service. `AlpacaClient` is shared by `MarketMonitorService`, `Trader` (and thus `StockTrader`), and `TradeLifecycleManager`; `TickerService` also holds an `AlpacaClient`. `SentimentResponse` is created inside `SentimentService` and passed into `TradeLifecycleManager.archive_news_entry`.
+**Shared roles:** `SingletonMeta` ensures a single instance for each singleton service. `AlpacaClient` is shared by `MarketMonitorService`, `Trader` (and thus `StockTrader`), and `TradeLifecycleManager`; `TickerService` also holds an `AlpacaClient`.
 
 #### Mermaid version (renders on github.com; see troubleshooting for local preview)
 
@@ -227,7 +225,6 @@ flowchart TD
     SS --> LS
     SS --> TKS[TickerService]
     SS --> TI[Timer]
-    SS --> SR[SentimentResponse]
 
     TSvc --> SM
     LS --> SM
