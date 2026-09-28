@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import re
-from pathlib import Path
-from typing import Dict, List, Tuple
+from datetime import datetime
+from typing import Any, Dict, Sequence
 
 import pandas as pd
 import streamlit as st
-from filelock import FileLock
-from trend_core.configs import LOG_VIEWER_MAX_LINES
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+
+from trend_core.base.datetime_utils import convert_series_to_display_tz
+from trend_core.configs import DISPLAY_TIMEZONE_NAME, LOG_VIEWER_MAX_LINES
+from trend_core.database.db_service import DatabaseService
 
 
 _LEVEL_COLORS: Dict[str, str] = {
@@ -18,10 +19,15 @@ _LEVEL_COLORS: Dict[str, str] = {
     "DEBUG": "#1976d2",
 }
 
-_LINE_RE = re.compile(r"^(?P<ts>.+?) - (?P<level>[A-Z]+) - (?P<msg>.*)$")
-
 _LOG_GRID_HEIGHT = 420
 _UNKNOWN_COLOR = "#616161"
+
+_LOGS_SQL = """
+SELECT created_at, level, message
+FROM logs
+ORDER BY created_at DESC
+LIMIT %s
+"""
 
 
 def _row_style_js() -> JsCode:
@@ -42,77 +48,65 @@ function(params) {{
     return JsCode(code)
 
 
-def _read_log_lines(path: Path, lock_path: Path, timeout_s: float = 60.0) -> List[str]:
-    if not path.is_file():
-        return []
+def _ensure_database_open(db: DatabaseService) -> None:
+    # open() replaces _conn without closing it, so only connect when needed.
+    conn = db._conn
+    if conn is None or conn.closed:
+        db.open()
 
-    lock = FileLock(str(lock_path), timeout=timeout_s)
-    lock.acquire()
-    lines = []
+
+def _format_display_time(value: object) -> str:
+    if value is None:
+        return "—"
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.read().splitlines()
-    finally:
-        lock.release()
-
-    return lines
-
-
-def _parse_line(line: str) -> Tuple[str, str, str]:
-    """
-    Returns (level, ts, msg). If parse fails, level is 'UNKNOWN'.
-    """
-    m = _LINE_RE.match(line)
-    if not m:
-        return ("UNKNOWN", "", line)
-    ts = m.group("ts")
-    level = m.group("level")
-    msg = m.group("msg")
-    return (level, ts, msg)
+        if pd.isna(value):
+            return "—"
+    except TypeError:
+        pass
+    if isinstance(value, pd.Timestamp):
+        value = value.to_pydatetime()
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
 
 
-def _lines_to_sorted_dataframe(lines: List[str]) -> pd.DataFrame:
-    levels: List[str] = []
-    ts_strings: List[str] = []
-    datetime_display: List[str] = []
-    messages: List[str] = []
-    for ln in lines:
-        level, ts, msg = _parse_line(ln)
-        levels.append(level)
-        ts_strings.append(ts)
-        datetime_display.append(ts if ts else "—")
-        messages.append(msg)
-    df = pd.DataFrame(
+def _rows_to_dataframe(rows: Sequence[Sequence[Any]]) -> pd.DataFrame:
+    frame = pd.DataFrame.from_records(list(rows), columns=["created_at", "level", "message"])
+    if frame.empty:
+        return pd.DataFrame(columns=["Datetime", "Level", "Message"])
+    displayed = convert_series_to_display_tz(frame["created_at"], DISPLAY_TIMEZONE_NAME)
+    return pd.DataFrame(
         {
-            "Datetime": datetime_display,
-            "Level": levels,
-            "Message": messages,
+            "Datetime": [_format_display_time(value) for value in displayed],
+            "Level": frame["level"].map(lambda value: "" if value is None else str(value)),
+            "Message": frame["message"].map(lambda value: "" if value is None else str(value)),
         }
     )
-    if df.empty:
-        return pd.DataFrame(columns=["Datetime", "Level", "Message"])
-    df["_dt"] = pd.to_datetime(ts_strings, errors="coerce")
-    df = df.sort_values("_dt", ascending=False, na_position="last")
-    return df.drop(columns=["_dt"]).reset_index(drop=True)
+
+
+def _load_log_rows() -> list:
+    db = DatabaseService()
+    _ensure_database_open(db)
+    rows = db.fetch_all(_LOGS_SQL, (LOG_VIEWER_MAX_LINES,))
+    return list(rows)
 
 
 def render_log_viewer() -> None:
     st.subheader("Log Viewer")
 
-
     if "log_df" not in st.session_state or "grid_options" not in st.session_state:
         with st.spinner("Getting Log data...", show_time=True):
-            log_dir = Path(__file__).resolve().parents[3] / "logs"
-            log_path = log_dir / "logs.txt"
-            lock_path = log_dir / "logs.txt.lock"
-            lines = _read_log_lines(log_path, lock_path)
-
-            if not lines:
-                st.warning("Log file not found yet (expected `logs/logs.txt`).")
+            try:
+                rows = _load_log_rows()
+            except Exception:
+                st.warning("Could not load logs from the database.")
                 return
 
-            lines = lines[-LOG_VIEWER_MAX_LINES:]
-            df = _lines_to_sorted_dataframe(lines)
+            if not rows:
+                st.warning("No log rows in the database yet.")
+                return
+
+            df = _rows_to_dataframe(rows)
 
             gb = GridOptionsBuilder.from_dataframe(df)
             gb.configure_default_column(
