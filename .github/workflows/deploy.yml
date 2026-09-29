@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, valhalla]
 
     env:
       KUBECONFIG: /home/mike/.kube/config
