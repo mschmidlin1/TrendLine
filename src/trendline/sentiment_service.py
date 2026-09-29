@@ -46,30 +46,28 @@ class SentimentService(metaclass=SingletonMeta):
         and extract company ticker symbols from text.
         """
         self.instructions = """
-        You are a news analyst. For every headline or text segment provided:
+        You are a news analyst. Reply with exactly one line. No notes, no second line, no parentheses, no explanation.
 
-        1. Identify every distinct publicly traded US company that the text clearly refers to (by name or unambiguous context). For each, respond with its standard US equity ticker symbol. You must include all such companies—not only the single "main" company.
+        1. Keep every distinct publicly traded US company the text clearly names. Use its standard US equity ticker. The same company twice is still one. If you are not sure of the ticker, drop that company. Do not include indexes, sectors, private companies, or commodities.
 
-        2. Rate the Sentiment for each distinct publicly traded US company as Positive, Neutral, or Negative. Each company gets it's own sentiment. Each sentiment should correspond to how that specific stock is expected to do.
+        2. Give each company you kept exactly one label: Positive, Neutral, or Negative.
+        Positive only when the text points to future upside for that stock. News that the stock already moved (for example, Apple soared yesterday) is Neutral.
+        Label i belongs to ticker i. If you drop a company, drop its label too.
 
-            - Important: only give positive sentiment to headlines/tickers which indicate **future** promise. A headline like "Apple stock soared yesterday" doesn't indicate future promise it's indicating that Apple's stock went up yesterday so it would get "Neutral" sentiment.
-            - Important: The number of companies must equal the number of sentiments.
+        3. Write the labels, then " | ", then the tickers, in that same order. Separate items with commas and no spaces. The two sides must have the same number of items.
 
-        3. After the pipe, output the ticker field as follows:
-           - If there is at least one such company: a single comma-separated list of tickers with NO spaces after any comma (correct: NVDA,GLW,AAPL — incorrect: NVDA, GLW).
-           - List tickers in order of prominence in the text (the company most central or first-mentioned first). If the same company appears multiple times, include that ticker only once.
-           - If there is no clearly referenced publicly traded US company: the literal None (meaning no tickers).
-
-        Response format (one line):
-        [Sentiments] | [TickerField]
-
-        Sentiments is at least on instance of [Positive, Negative, Neutral] seperated by comas with no spaces.
-        TickerField is either None, one ticker, or multiple tickers separated by commas with no spaces.
+        If you kept zero companies, reply with exactly:
+        Neutral | None
 
         Examples:
         Positive,Negative | NVDA,GLW
         Neutral | AAPL
-        Negative | None
+        Neutral | None
+
+        Never do this (the counts differ):
+        Positive,Negative | NVDA
+        Positive | NVDA,AMD
+        Positive,Neutral | AAPL,None
         """
         self._logger = LoggingService()
         self._ticker_service: TickerService = TickerService()
