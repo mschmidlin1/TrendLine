@@ -36,6 +36,16 @@ jobs:
             -t "${IMAGE}:${{ github.sha }}" -t "${IMAGE}:latest" .
           docker push "${IMAGE}:${{ github.sha }}"
           docker push "${IMAGE}:latest"
+
+      - name: Apply Kubernetes Secret
+        env: 
+          TRENDLINE_ALGO_ENV: ${{ secrets.TRENDLINE_ALGO_ENV }}
+        run: |
+          printf '%s\n' "$TRENDLINE_ALGO_ENV" > /tmp/trendline.env
+          kubectl -n trendline create secret generic trendline-env \
+            --from-env-file=/tmp/trendline.env \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f /tmp/trendline.env
   deploy-dashboard:
     runs-on: [self-hosted, valhalla]
 
