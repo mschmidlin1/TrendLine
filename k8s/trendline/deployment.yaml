@@ -24,3 +24,5 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: OLLAMA_HOST
+              value: "http://$(POSTGRES_HOST):11434"
