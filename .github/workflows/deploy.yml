@@ -11,7 +11,14 @@ permissions:
   packages: write
 
 jobs:
-  deploy:
+  deploy-algo:
+    runs-on: [self-hosted, vanaheim]
+    steps:
+      - name: Show which machine this is
+        run: |
+          echo "runner: ${{ runner.name }}"
+          hostname
+  deploy-dashboard:
     runs-on: [self-hosted, valhalla]
 
     env:
