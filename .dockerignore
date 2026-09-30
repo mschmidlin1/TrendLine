@@ -15,3 +15,6 @@ notebooks
 deprecated_code
 plans
 tests
+
+**/node_modules
+**/dist

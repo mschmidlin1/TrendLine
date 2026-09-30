@@ -219,3 +219,6 @@ logs/
 .trendline_port
 
 .trendline_streamlit.pid
+
+src/dashboard/frontend/node_modules/
+src/dashboard/frontend/dist/
