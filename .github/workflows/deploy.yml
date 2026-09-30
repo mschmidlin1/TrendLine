@@ -46,6 +46,20 @@ jobs:
             --from-env-file=/tmp/trendline.env \
             --dry-run=client -o yaml | kubectl apply -f -
           rm -f /tmp/trendline.env
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -k k8s/trendline/
+      - name: Roll out new image
+        run: |
+          kubectl set image deployment/trendline \
+            app=ghcr.io/mschmidlin1/trendline-algo:${{ github.sha }} \
+            -n trendline
+          kubectl rollout status deployment/trendline \
+            -n trendline \
+            --timeout=5m
+
+
+            
   deploy-dashboard:
     runs-on: [self-hosted, valhalla]
 
@@ -68,7 +82,7 @@ jobs:
           docker push "${IMAGE}:latest"
 
       - name: Apply Kubernetes manifests
-        run: kubectl apply -k k8s/
+        run: kubectl apply -k k8s/streamlit-dash/
 
       - name: Apply Kubernetes Secret
         env:
