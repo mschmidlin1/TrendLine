@@ -21,6 +21,8 @@ jobs:
         run: |
           echo "runner: ${{ runner.name }}"
           hostname
+      - name: Show the cluster this runner can reach
+        run: kubectl get nodes
   deploy-dashboard:
     runs-on: [self-hosted, valhalla]
 
