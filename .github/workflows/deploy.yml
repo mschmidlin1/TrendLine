@@ -13,6 +13,9 @@ permissions:
 jobs:
   deploy-algo:
     runs-on: [self-hosted, vanaheim]
+
+    env:
+      KUBECONFIG: /home/mike/.kube/config
     steps:
       - name: Show which machine this is
         run: |
